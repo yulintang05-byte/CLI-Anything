@@ -1,0 +1,13 @@
+name = "empire-brain"
+main = "index.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "empire-brain"
+database_id = "415b3028-d4f5-46bd-a8a1-a9f42178eb9f"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "c5bf07c2dde34b5c9175d54efb1e3f5c"
