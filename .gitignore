@@ -32,6 +32,7 @@
 !/anygen/
 !/zoom/
 !/drawio/
+!/clipper/
 
 # Step 5: Inside each software dir, ignore everything (including dotfiles)
 /gimp/*
@@ -56,6 +57,8 @@
 /zoom/.*
 /drawio/*
 /drawio/.*
+/clipper/*
+/clipper/.*
 
 # Step 6: ...except agent-harness/
 !/gimp/agent-harness/
@@ -69,6 +72,9 @@
 !/anygen/agent-harness/
 !/zoom/agent-harness/
 !/drawio/agent-harness/
+!/clipper/agent-harness/
+!/clipper/CLIPPER.md
+!/clipper/HARNESS.md
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
