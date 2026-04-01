@@ -1,0 +1,19 @@
+{
+  "name": "hermes-license-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker — Hermes license validation proxy via Whop",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "tail": "wrangler tail",
+    "secret:put": "wrangler secret put WHOP_API_KEY"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
