@@ -1,0 +1,246 @@
+# ==============================================================================
+#  Hermes — Release Workflow
+#
+#  Triggers on version tags (v*).
+#  Builds for four targets, uploads binaries + a checksums file to the
+#  GitHub Release, and makes the release public.
+#
+#  Secrets required (set in repo Settings → Secrets → Actions):
+#    GITHUB_TOKEN  — auto-provided by GitHub Actions (no manual setup needed)
+# ==============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Allow this workflow to create releases and upload assets.
+permissions:
+  contents: write
+
+# ---------------------------------------------------------------------------
+# Build matrix
+# ---------------------------------------------------------------------------
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Linux x86_64 --------------------------------------------------
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            os: linux
+            arch: x86_64
+            use_cross: false
+
+          # ---- Linux aarch64 (cross-compiled) --------------------------------
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            os: linux
+            arch: aarch64
+            use_cross: true
+
+          # ---- macOS x86_64 --------------------------------------------------
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            os: darwin
+            arch: x86_64
+            use_cross: false
+
+          # ---- macOS aarch64 (Apple Silicon) ---------------------------------
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            os: darwin
+            arch: aarch64
+            use_cross: false
+
+    steps:
+      # ------------------------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # 2. Rust toolchain
+      #    Pin to stable; add the cross-compilation target when needed.
+      # ------------------------------------------------------------------------
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Cache Cargo registry / build artefacts to speed up subsequent runs.
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "claurst/src-rust -> target"
+          key: ${{ matrix.target }}
+
+      # ------------------------------------------------------------------------
+      # 3. Install `cross` for targets that need it (Linux aarch64)
+      # ------------------------------------------------------------------------
+      - name: Install cross
+        if: matrix.use_cross == true
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
+
+      # ------------------------------------------------------------------------
+      # 4. Build
+      #    Use `cross` for cross-compiled targets, native `cargo` otherwise.
+      # ------------------------------------------------------------------------
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release \
+              --manifest-path claurst/src-rust/Cargo.toml \
+              --target ${{ matrix.target }}
+          else
+            cargo build --release \
+              --manifest-path claurst/src-rust/Cargo.toml \
+              --target ${{ matrix.target }}
+          fi
+
+      # ------------------------------------------------------------------------
+      # 5. Rename binary to hermes-{os}-{arch}
+      #    Cargo places the binary at:
+      #      claurst/src-rust/target/<target>/release/hermes
+      # ------------------------------------------------------------------------
+      - name: Rename binary
+        id: rename
+        shell: bash
+        run: |
+          SRC="claurst/src-rust/target/${{ matrix.target }}/release/hermes"
+          DEST="hermes-${{ matrix.os }}-${{ matrix.arch }}"
+
+          # On Windows the binary would have a .exe suffix — future-proof check.
+          if [ -f "${SRC}.exe" ]; then
+            SRC="${SRC}.exe"
+            DEST="${DEST}.exe"
+          fi
+
+          mv "${SRC}" "${DEST}"
+          echo "asset_name=${DEST}" >> "$GITHUB_OUTPUT"
+          echo "asset_path=${DEST}"   >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------------
+      # 6. Compute per-artifact SHA256
+      # ------------------------------------------------------------------------
+      - name: Compute SHA256 checksum
+        id: checksum
+        shell: bash
+        run: |
+          ASSET="${{ steps.rename.outputs.asset_name }}"
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "${ASSET}" > "${ASSET}.sha256"
+          else
+            # macOS ships `shasum` instead of `sha256sum`
+            shasum -a 256 "${ASSET}" > "${ASSET}.sha256"
+          fi
+          echo "checksum_file=${ASSET}.sha256" >> "$GITHUB_OUTPUT"
+          cat "${ASSET}.sha256"
+
+      # ------------------------------------------------------------------------
+      # 7. Upload binary + per-file checksum as workflow artefacts so the
+      #    release job can collect them all in one place.
+      # ------------------------------------------------------------------------
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            ${{ steps.rename.outputs.asset_path }}
+            ${{ steps.checksum.outputs.checksum_file }}
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Release job — runs after all matrix builds succeed
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      # ------------------------------------------------------------------------
+      # 1. Checkout (needed for `gh` CLI context)
+      # ------------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------------
+      # 2. Download all per-platform artefacts into ./dist/
+      # ------------------------------------------------------------------------
+      - name: Download all build artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List downloaded artefacts
+        run: ls -lh dist/
+
+      # ------------------------------------------------------------------------
+      # 3. Combine the individual .sha256 files into a single checksums.txt
+      # ------------------------------------------------------------------------
+      - name: Generate checksums.txt
+        working-directory: dist
+        run: |
+          # Concatenate all per-file .sha256 sidecar files
+          cat *.sha256 > checksums.txt
+          echo ""
+          echo "=== checksums.txt ==="
+          cat checksums.txt
+
+      # ------------------------------------------------------------------------
+      # 4. Extract the tag name (strip leading 'v' for the version number)
+      # ------------------------------------------------------------------------
+      - name: Extract version
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"          # e.g. v1.2.3
+          VERSION="${TAG#v}"               # e.g. 1.2.3
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------------
+      # 5. Create the GitHub Release (draft=false, pre-release auto-detected)
+      # ------------------------------------------------------------------------
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Determine whether this is a pre-release (contains - e.g. 1.0.0-beta.1)
+          if echo "${VERSION}" | grep -qE '[-]'; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+
+          # Create the release; --generate-notes auto-fills the changelog.
+          gh release create "${TAG}" \
+            --title "Hermes v${VERSION}" \
+            --generate-notes \
+            ${PRERELEASE_FLAG} \
+            dist/hermes-linux-x86_64 \
+            dist/hermes-linux-aarch64 \
+            dist/hermes-darwin-x86_64 \
+            dist/hermes-darwin-aarch64 \
+            dist/checksums.txt
+
+      # ------------------------------------------------------------------------
+      # 6. Print the release URL for visibility in the workflow summary
+      # ------------------------------------------------------------------------
+      - name: Print release URL
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.version.outputs.tag }}" --json url -q .url
