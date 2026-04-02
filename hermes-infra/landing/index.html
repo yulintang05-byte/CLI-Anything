@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hermes — The terminal Claude deserves</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0d0d0d;color:#e8e8e8;font-family:'SF Mono',Monaco,monospace;line-height:1.6}
+    .hero{max-width:780px;margin:0 auto;padding:80px 24px 60px}
+    .badge{display:inline-block;background:#1a1a1a;border:1px solid #333;color:#5fdfdf;font-size:12px;padding:4px 12px;border-radius:20px;margin-bottom:24px;letter-spacing:.05em}
+    h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;line-height:1.15;color:#fff;margin-bottom:16px}
+    h1 span{color:#5fdfdf}
+    .sub{font-size:1.1rem;color:#888;max-width:520px;margin-bottom:40px}
+    .install{background:#111;border:1px solid #222;border-radius:8px;padding:16px 20px;font-size:.95rem;margin-bottom:40px;display:flex;align-items:center;gap:12px}
+    .install code{color:#5fdfdf;flex:1}
+    .install button{background:#5fdfdf;color:#000;border:none;padding:6px 14px;border-radius:4px;font-family:inherit;font-size:.85rem;cursor:pointer;white-space:nowrap}
+    .cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:80px}
+    .btn-primary{background:#5fdfdf;color:#000;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;font-size:.95rem}
+    .btn-secondary{background:transparent;color:#888;border:1px solid #333;padding:12px 28px;border-radius:6px;text-decoration:none;font-size:.95rem}
+    .features{max-width:780px;margin:0 auto;padding:0 24px 80px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px}
+    .feat{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:24px}
+    .feat-icon{font-size:1.5rem;margin-bottom:12px}
+    .feat h3{color:#fff;margin-bottom:8px;font-size:1rem}
+    .feat p{color:#666;font-size:.88rem}
+    .pricing{max-width:780px;margin:0 auto;padding:0 24px 80px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+    .plan{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:28px 24px}
+    .plan.featured{border-color:#5fdfdf}
+    .plan-name{font-size:.85rem;color:#888;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+    .plan-price{font-size:2rem;font-weight:700;color:#fff;margin-bottom:4px}
+    .plan-price span{font-size:.9rem;color:#555;font-weight:400}
+    .plan-desc{color:#555;font-size:.85rem;margin-bottom:20px}
+    .plan ul{list-style:none;color:#888;font-size:.85rem}
+    .plan ul li{padding:4px 0;padding-left:20px;position:relative}
+    .plan ul li:before{content:"✓";position:absolute;left:0;color:#5fdfdf}
+    .plan-cta{display:block;text-align:center;margin-top:24px;padding:10px;border-radius:5px;text-decoration:none;font-size:.9rem;font-weight:700}
+    .plan.featured .plan-cta{background:#5fdfdf;color:#000}
+    .plan:not(.featured) .plan-cta{border:1px solid #333;color:#888}
+    footer{text-align:center;padding:40px 24px;color:#333;font-size:.8rem}
+    footer a{color:#555;text-decoration:none}
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">⚡ Built in Rust · Single binary · No Electron</div>
+  <h1>The terminal<br><span>Claude deserves.</span></h1>
+  <p class="sub">Hermes brings Claude directly into your workflow. Keyboard-native, blazing fast, built for developers who live in the command line.</p>
+
+  <div class="install">
+    <code>curl -fsSL https://install.hermes.sh | sh</code>
+    <button onclick="navigator.clipboard.writeText('curl -fsSL https://install.hermes.sh | sh')">Copy</button>
+  </div>
+
+  <div class="cta">
+    <a class="btn-primary" href="https://whop.com/hermes">Get Pro — $12/mo</a>
+    <a class="btn-secondary" href="https://whop.com/hermes">14-day free trial</a>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feat">
+    <div class="feat-icon">⚡</div>
+    <h3>Native speed</h3>
+    <p>Starts in &lt;100ms. Single Rust binary, zero Node.js, zero Electron. Your terminal, uncompromised.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">📁</div>
+    <h3>Full codebase context</h3>
+    <p><code>/load ./src</code> — give Claude your entire project in one command. Real file I/O, real bash execution.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🧠</div>
+    <h3>Persistent memory</h3>
+    <p>Sessions that remember your projects, your preferences, your patterns. Auto-compresses long conversations.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🤖</div>
+    <h3>41 built-in tools</h3>
+    <p>Bash, file ops, web search, git, MCP servers, background agents. The full Claude Code toolbox.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🔄</div>
+    <h3>Works offline</h3>
+    <p>72-hour grace period. Flights, spotty wifi, corporate proxies — your license never blocks you.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🎨</div>
+    <h3>Beautiful TUI</h3>
+    <p>Streaming output, syntax highlighting, diff viewer, vim mode. A terminal UI that actually looks good.</p>
+  </div>
+</div>
+
+<h2 style="text-align:center;color:#fff;margin-bottom:32px;font-size:1.5rem">Simple pricing</h2>
+<div class="pricing">
+  <div class="plan">
+    <div class="plan-name">Free Trial</div>
+    <div class="plan-price">$0 <span>/ 14 days</span></div>
+    <div class="plan-desc">No credit card required</div>
+    <ul>
+      <li>50 messages/day</li>
+      <li>Claude Haiku</li>
+      <li>Basic tools</li>
+      <li>Single device</li>
+    </ul>
+    <a class="plan-cta" href="https://whop.com/hermes" style="border:1px solid #333;color:#888">Start free trial</a>
+  </div>
+  <div class="plan featured">
+    <div class="plan-name">Pro</div>
+    <div class="plan-price">$12 <span>/ month</span></div>
+    <div class="plan-desc">For individual developers</div>
+    <ul>
+      <li>Unlimited messages</li>
+      <li>Claude Sonnet (latest)</li>
+      <li>File context loading</li>
+      <li>30-day history</li>
+      <li>Custom system prompts</li>
+      <li>3 devices</li>
+    </ul>
+    <a class="plan-cta" href="https://whop.com/hermes">Get Pro</a>
+  </div>
+  <div class="plan">
+    <div class="plan-name">Ultra</div>
+    <div class="plan-price">$29 <span>/ month</span></div>
+    <div class="plan-desc">For power users &amp; teams</div>
+    <ul>
+      <li>Claude Opus on demand</li>
+      <li>Multi-agent mode</li>
+      <li>Project workspaces</li>
+      <li>BYOK (own API key)</li>
+      <li>Unlimited devices</li>
+      <li>Priority support</li>
+    </ul>
+    <a class="plan-cta" href="https://whop.com/hermes" style="border:1px solid #333;color:#888">Get Ultra</a>
+  </div>
+</div>
+
+<footer>
+  <p>Hermes &copy; 2025 &nbsp;·&nbsp; <a href="https://whop.com/hermes">Buy</a> &nbsp;·&nbsp; <a href="https://github.com/YOUR_USERNAME/hermes">GitHub</a></p>
+</footer>
+
+</body>
+</html>
