@@ -1,0 +1,575 @@
+# Instincts generated from https://github.com/yulintang05-byte/CLI-Anything
+# Generated: 2026-04-02T22:50:21.012Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: CLI-Anything-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Commit Length
+
+## Action
+
+Keep commit messages concise (~48 characters)
+
+## Evidence
+
+- Average commit message length: 48 chars
+- Based on 43 commits
+
+---
+id: CLI-Anything-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: CLI-Anything-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: CLI-Anything-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Export Style
+
+## Action
+
+Prefer default exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: default
+
+---
+id: CLI-Anything-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: CLI-Anything-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Test Types
+
+## Action
+
+Write unit, e2e tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, e2e
+- Coverage config: no
+
+---
+id: CLI-Anything-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~14x per month
+- Files: **/*.test.*
+
+---
+id: CLI-Anything-workflow-test-driven-development
+trigger: "when adding new functionality"
+confidence: 0.75
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Test Driven Development
+
+## Action
+
+Follow the test-driven-development workflow:
+1. Write failing test
+2. Implement code to pass test
+3. Refactor if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~5x per month
+- Files: **/*.test.*, **/*.spec.*, src/**/*
+
+---
+id: CLI-Anything-workflow-add-new-agent-harness
+trigger: "when doing add new agent harness"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Add New Agent Harness
+
+## Action
+
+Follow the add-new-agent-harness workflow:
+1. Create tool-specific directory under <tool>/agent-harness/
+2. Add <TOOL>.md and HARNESS.md (optional) for documentation
+3. Implement CLI entrypoint: cli_anything/<tool>/<tool>_cli.py (and sometimes __main__.py)
+4. Implement core modules: cli_anything/<tool>/core/*.py (project/session/export/etc.)
+5. Add utils: cli_anything/<tool>/utils/*.py (backend wrappers, REPL skins, etc.)
+6. Add tests: cli_anything/<tool>/tests/{__init__.py, test_core.py, test_full_e2e.py, TEST.md}
+7. Add or update setup.py in agent-harness/
+8. Update .gitignore and README.md as needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: <tool>/agent-harness/<TOOL>.md, <tool>/agent-harness/cli_anything/<tool>/README.md, <tool>/agent-harness/cli_anything/<tool>/__init__.py
+
+---
+id: CLI-Anything-workflow-add-new-skill-or-plugin-command
+trigger: "when doing add new skill or plugin command"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Add New Skill Or Plugin Command
+
+## Action
+
+Follow the add-new-skill-or-plugin-command workflow:
+1. Create new skill/plugin directory (e.g., codex-skill/ or cli-anything-plugin/commands/)
+2. Add SKILL.md or command documentation
+3. Add agent config YAML or command implementation script
+4. Add or update install scripts if needed
+5. Update .gitignore, README.md, and README_CN.md
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: codex-skill/SKILL.md, codex-skill/agents/*.yaml, codex-skill/scripts/install.sh
+
+---
+id: CLI-Anything-workflow-fix-or-update-setup-py-metadata
+trigger: "when doing fix or update setup py metadata"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Fix Or Update Setup Py Metadata
+
+## Action
+
+Follow the fix-or-update-setup-py-metadata workflow:
+1. Identify all agent-harness/<tool>/setup.py files
+2. Update URLs, author, or dependency fields as needed
+3. Commit all modified setup.py files together
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: audacity/agent-harness/setup.py, blender/agent-harness/setup.py, gimp/agent-harness/setup.py
+
+---
+id: CLI-Anything-workflow-add-or-update-readme-and-docs
+trigger: "when doing add or update readme and docs"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/yulintang05-byte/CLI-Anything
+---
+
+# CLI Anything Workflow Add Or Update Readme And Docs
+
+## Action
+
+Follow the add-or-update-readme-and-docs workflow:
+1. Edit README.md and README_CN.md
+2. Optionally update related documentation files (e.g., cli-anything-plugin/README.md)
+3. Commit with a docs- or update- prefix
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: README.md, README_CN.md, cli-anything-plugin/README.md
+
+---
+id: cli-anything-instinct-file-naming
+trigger: "When creating a new file in the codebase"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct File Naming
+
+## Action
+
+Name the file using snake_case convention
+
+## Evidence
+
+- Pattern in namingConventions.files: snake_case
+
+---
+id: cli-anything-instinct-function-naming
+trigger: "When defining a new function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Function Naming
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern in namingConventions.functions: camelCase
+
+---
+id: cli-anything-instinct-class-naming
+trigger: "When defining a new class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Class Naming
+
+## Action
+
+Use PascalCase for class names
+
+## Evidence
+
+- Pattern in namingConventions.classes: PascalCase
+
+---
+id: cli-anything-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Constant Naming
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in namingConventions.constants: SCREAMING_SNAKE_CASE
+
+---
+id: cli-anything-instinct-import-style
+trigger: "When importing modules within the package"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Import Style
+
+## Action
+
+Use relative import statements
+
+## Evidence
+
+- Pattern in importStyle: relative
+
+---
+id: cli-anything-instinct-export-style
+trigger: "When exporting modules or functions"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Export Style
+
+## Action
+
+Use default export style
+
+## Evidence
+
+- Pattern in exportStyle: default
+
+---
+id: cli-anything-instinct-test-file-pattern
+trigger: "When creating a test file"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Test File Pattern
+
+## Action
+
+Name the test file with a .test.ts suffix
+
+## Evidence
+
+- Pattern in testing.filePattern: *.test.ts
+- Seen in src/utils/validation.test.ts
+
+---
+id: cli-anything-instinct-test-types
+trigger: "When writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Test Types
+
+## Action
+
+Include both unit and end-to-end (e2e) tests
+
+## Evidence
+
+- Pattern in testing.testTypes: unit, e2e
+- Files: test_core.py, test_full_e2e.py
+
+---
+id: cli-anything-instinct-tdd-workflow
+trigger: "When following test-driven development"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Tdd Workflow
+
+## Action
+
+First write a failing test, then implement code to pass the test, then refactor if needed
+
+## Evidence
+
+- Workflow: test-driven-development
+- Commit: test: add tests for user validation
+- Commit: feat: implement user validation
+
+---
+id: cli-anything-instinct-commit-prefix
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Commit Prefix
+
+## Action
+
+Prefix the commit message with fix:, docs:, or feat: according to the change type
+
+## Evidence
+
+- Pattern in commits.prefixes: fix, docs, feat
+- Examples: fix: replace placeholder URLs...
+
+---
+id: cli-anything-instinct-commit-length
+trigger: "When writing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Commit Length
+
+## Action
+
+Keep the commit message concise (around 48 characters on average)
+
+## Evidence
+
+- Pattern in commits.averageLength: 48
+
+---
+id: cli-anything-instinct-add-new-agent-harness
+trigger: "When adding support for a new external tool as an agent harness"
+confidence: 0.99
+domain: workflow
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Add New Agent Harness
+
+## Action
+
+Follow the add-new-agent-harness workflow: create tool directory, add docs, implement CLI entrypoint, core modules, utils, tests, setup.py, and update .gitignore and README.md
+
+## Evidence
+
+- Workflow: add-new-agent-harness
+- Files: <tool>/agent-harness/<TOOL>.md, ...
+- Commit sequence in workflow
+
+---
+id: cli-anything-instinct-add-new-skill-or-plugin-command
+trigger: "When adding a new skill or plugin command"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Add New Skill Or Plugin Command
+
+## Action
+
+Follow the add-new-skill-or-plugin-command workflow: create skill/plugin directory, add SKILL.md or command docs, agent config YAML or script, install scripts, and update .gitignore, README.md, README_CN.md
+
+## Evidence
+
+- Workflow: add-new-skill-or-plugin-command
+- Files: codex-skill/SKILL.md, ...
+- Commit sequence in workflow
+
+---
+id: cli-anything-instinct-fix-or-update-setup-py-metadata
+trigger: "When correcting or standardizing packaging metadata or dependencies in agent harnesses"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Fix Or Update Setup Py Metadata
+
+## Action
+
+Update all agent-harness/<tool>/setup.py files with correct metadata and commit together
+
+## Evidence
+
+- Workflow: fix-or-update-setup-py-metadata
+- Files: audacity/agent-harness/setup.py, ...
+- Commit sequence in workflow
+
+---
+id: cli-anything-instinct-add-or-update-readme-and-docs
+trigger: "When documenting a new feature, updating limitations, or clarifying usage"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: yulintang05-byte/CLI-Anything
+---
+
+# Cli Anything Instinct Add Or Update Readme And Docs
+
+## Action
+
+Edit README.md and README_CN.md, optionally update related docs, and commit with a docs- or update- prefix
+
+## Evidence
+
+- Workflow: add-or-update-readme-and-docs
+- Files: README.md, README_CN.md
+- Commit sequence in workflow
+
