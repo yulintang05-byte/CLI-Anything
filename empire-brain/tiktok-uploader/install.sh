@@ -1,6 +1,6 @@
 #!/bin/bash
 # Empire TikTok Uploader — Install
-# Clones TiktokAutoUploader into passive-income and sets it up
+# Clones TiktokAutoUploader into passive-income and runs its own setup.sh
 
 set -e
 EMPIRE_DIR="$HOME/passive-income"
@@ -19,6 +19,8 @@ command -v node >/dev/null || { echo "❌ node 18+ required: brew install node";
 command -v npm >/dev/null || { echo "❌ npm required"; exit 1; }
 echo "   ✓ python3, node, npm found"
 
+mkdir -p "$EMPIRE_DIR"
+
 # 2. Clone repo
 if [ -d "$UPLOADER_DIR" ]; then
   echo "→ TiktokAutoUploader already cloned, pulling latest..."
@@ -31,31 +33,28 @@ fi
 
 cd "$UPLOADER_DIR"
 
-# 3. Python deps
-echo "→ Installing Python dependencies..."
-pip3 install -r requirements.txt -q
+# 3. Run repo's own setup (python deps + tiktok-signature npm + playwright chromium + dirs)
+echo "→ Running repo setup.sh (Python deps, Node signature module, Playwright Chromium)..."
+bash ./setup.sh
 
-# 4. Node deps
-echo "→ Installing Node dependencies..."
-npm install --silent
-
-# 5. Playwright chromium
-echo "→ Installing Playwright Chromium (one-time, ~150MB)..."
-npx playwright install chromium
-
-# 6. Create videos directory
-mkdir -p videos cookies
+# 4. Ensure expected directories exist (setup.sh creates them too, belt-and-suspenders)
+mkdir -p CookiesDir VideosDirPath
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  TiktokAutoUploader installed!                       ║"
 echo "║                                                      ║"
-echo "║  Next: Login as @luckylefty0511                     ║"
+echo "║  Next: Login as @luckylefty0511                      ║"
 echo "║  Run:  cd ~/passive-income/TiktokAutoUploader        ║"
 echo "║        python3 cli.py login -n luckylefty0511        ║"
 echo "║                                                      ║"
-echo "║  Then test upload:                                   ║"
-echo "║        python3 cli.py upload --user luckylefty0511  ║"
-echo "║          -v path/to/video.mp4 -t 'Your title'       ║"
+echo "║  Then test upload (video must live in                ║"
+echo "║  ./VideosDirPath — pass just the filename):          ║"
+echo "║        python3 cli.py upload -u luckylefty0511 \\    ║"
+echo "║          -v myclip.mp4 -t 'Your title' -vi 0         ║"
+echo "║                                                      ║"
+echo "║  Or use the Empire wrapper (handles staging):        ║"
+echo "║        python3 empire_post.py --video path/clip.mp4 \\║"
+echo "║          --title 'Your title'                        ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
