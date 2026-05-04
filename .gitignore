@@ -79,6 +79,7 @@
 !/clipper/agent-harness/
 !/clipper/CLIPPER.md
 !/clipper/HARNESS.md
+!/social-trends/
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
