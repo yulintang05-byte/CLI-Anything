@@ -19,6 +19,7 @@
 !/claurst/
 !/hermes-infra/
 !/kairos/
+!/social-trend-engine/
 
 # Step 3: Allow cli-anything-plugin entirely
 !/cli-anything-plugin/
