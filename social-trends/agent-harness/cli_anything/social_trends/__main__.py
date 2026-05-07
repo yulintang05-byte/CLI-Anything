@@ -1,0 +1,6 @@
+"""Allow python -m cli_anything.social_trends to run the CLI."""
+
+from cli_anything.social_trends.social_trends_cli import main
+
+if __name__ == "__main__":
+    main()
