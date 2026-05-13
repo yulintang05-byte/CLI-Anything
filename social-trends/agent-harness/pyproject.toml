@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "cli-anything-social-trends"
+version = "1.0.0"
+description = "CLI harness for viral trend scraping, account optimization, and theme page growth"
+requires-python = ">=3.10"
+dependencies = ["click>=8.0"]
+
+[project.optional-dependencies]
+scraper = ["yt-dlp>=2024.1.0"]
+
+[project.scripts]
+social-trends = "cli_anything.social_trends.social_trends_cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cli_anything*"]
