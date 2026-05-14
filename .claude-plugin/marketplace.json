@@ -15,6 +15,15 @@
         "name": "cli-anything contributors"
       },
       "category": "development"
+    },
+    {
+      "name": "viraltrends",
+      "source": "./viral-trends/agent-harness",
+      "description": "YouTube + TikTok viral trend intelligence — scrape trending videos, hashtags, music; optimize social accounts; build and monetize theme pages.",
+      "author": {
+        "name": "cli-anything contributors"
+      },
+      "category": "social-media"
     }
   ]
 }
