@@ -37,6 +37,7 @@
 !/zoom/
 !/drawio/
 !/clipper/
+!/social-trend-scout/
 
 # Step 5: Inside each software dir, ignore everything (including dotfiles)
 /gimp/*
@@ -63,6 +64,8 @@
 /drawio/.*
 /clipper/*
 /clipper/.*
+/social-trend-scout/*
+/social-trend-scout/.*
 
 # Step 6: ...except agent-harness/
 !/gimp/agent-harness/
@@ -79,6 +82,8 @@
 !/clipper/agent-harness/
 !/clipper/CLIPPER.md
 !/clipper/HARNESS.md
+!/social-trend-scout/agent-harness/
+!/social-trend-scout/SOCIAL_TREND_SCOUT.md
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
