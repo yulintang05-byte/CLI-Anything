@@ -1,0 +1,1 @@
+"""TrendScraper core modules."""
