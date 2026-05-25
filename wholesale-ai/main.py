@@ -45,6 +45,18 @@ from modules.market_data import (
     get_zip_info, estimate_arv_by_market, get_repair_cost_guide,
     get_wholesale_checklist, get_motivated_seller_sources,
 )
+from modules.pipeline import (
+    add_deal, get_all_deals, update_deal, advance_stage,
+    delete_deal, pipeline_summary, STAGES, STAGE_COLORS,
+)
+from modules.neighborhood import (
+    get_city_crime_data, get_neighborhood_links,
+    estimate_property_tax, estimate_insurance, get_property_records_urls,
+)
+from modules.creative_financing import (
+    calc_dscr, calc_subject_to, calc_seller_finance,
+    calc_seller_credits, calc_lease_option, recommend_strategy,
+)
 
 console = Console()
 
@@ -67,7 +79,9 @@ def show_banner():
     console.print(BANNER)
     ai_status = "[green]✓ Active[/green]" if os.getenv("ANTHROPIC_API_KEY") else "[red]✗ Not set (add to .env)[/red]"
     hud_status = "[green]✓ Active[/green]" if os.getenv("HUD_API_TOKEN") else "[yellow]○ Optional (huduser.gov)[/yellow]"
-    console.print(f"  AI Advisor: {ai_status}   HUD FMR API: {hud_status}\n")
+    summary = pipeline_summary()
+    pipe_status = f"[cyan]{summary['active_deals']} active deals | ${summary['closed_fees']:,.0f} closed[/cyan]"
+    console.print(f"  AI Advisor: {ai_status}   HUD FMR API: {hud_status}   Pipeline: {pipe_status}\n")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,13 +126,18 @@ def main_menu():
             "  [bold cyan][8][/bold cyan]  Find Cash Buyers Strategy\n"
             "  [bold cyan][9][/bold cyan]  Repair Cost Guide\n"
             "  [bold cyan][10][/bold cyan] Ask the AI Advisor Anything\n"
-            "  [bold cyan][11][/bold cyan] Setup & API Keys\n"
+            "  [bold cyan][11][/bold cyan] Deal Pipeline / CRM\n"
+            "  [bold cyan][12][/bold cyan] Neighborhood & Crime Score\n"
+            "  [bold cyan][13][/bold cyan] DSCR Calculator (Rental Loan Qualifier)\n"
+            "  [bold cyan][14][/bold cyan] Creative Financing (Subject-To / Seller Finance)\n"
+            "  [bold cyan][15][/bold cyan] Property Tax & Insurance Estimates\n"
+            "  [bold cyan][16][/bold cyan] Setup & API Keys\n"
             "  [bold cyan][0][/bold cyan]  Exit\n",
             title="[bold green]MAIN MENU[/bold green]",
             border_style="green",
         ))
 
-        choice = Prompt.ask("[bold]Select[/bold]", choices=["0","1","2","3","4","5","6","7","8","9","10","11"])
+        choice = Prompt.ask("[bold]Select[/bold]", choices=["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"])
 
         if choice == "0":
             console.print("\n[bold green]Go get that bag. 💰[/bold green]\n")
@@ -144,6 +163,16 @@ def main_menu():
         elif choice == "10":
             menu_ask_advisor()
         elif choice == "11":
+            menu_pipeline()
+        elif choice == "12":
+            menu_neighborhood()
+        elif choice == "13":
+            menu_dscr()
+        elif choice == "14":
+            menu_creative_financing()
+        elif choice == "15":
+            menu_tax_insurance()
+        elif choice == "16":
             menu_setup()
 
 
@@ -673,6 +702,512 @@ def menu_setup():
                 "HUD_API_TOKEN=your-hud-token-here\n"
             )
             console.print(f"[green]Created .env — open it and add your keys[/green]")
+
+    press_enter()
+
+
+# ── 11. Deal Pipeline / CRM ──────────────────────────────────────────────────
+
+def menu_pipeline():
+    section("DEAL PIPELINE / CRM")
+
+    while True:
+        summary = pipeline_summary()
+        console.print(Panel(
+            f"  Active Deals: [cyan]{summary['active_deals']}[/cyan]   "
+            f"Potential Fees: [yellow]${summary['total_potential_fees']:,.0f}[/yellow]   "
+            f"Closed: [green]${summary['closed_fees']:,.0f}[/green]",
+            border_style="dim",
+        ))
+
+        console.print(
+            "  [1] View all deals  [2] Add new deal  [3] Update deal stage  "
+            "[4] Add notes  [5] Delete deal  [0] Back\n"
+        )
+        sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"])
+
+        if sub == "0":
+            break
+        elif sub == "1":
+            _pipeline_view()
+        elif sub == "2":
+            _pipeline_add()
+        elif sub == "3":
+            _pipeline_advance()
+        elif sub == "4":
+            _pipeline_notes()
+        elif sub == "5":
+            _pipeline_delete()
+
+
+def _pipeline_view():
+    deals = get_all_deals()
+    if not deals:
+        console.print("[yellow]No deals yet. Add your first deal![/yellow]")
+        press_enter()
+        return
+
+    # Group by stage
+    by_stage = {s: [] for s in STAGES}
+    for d in deals:
+        stage = d.get("stage", "Lead")
+        if stage in by_stage:
+            by_stage[stage].append(d)
+
+    for stage in STAGES:
+        stage_deals = by_stage[stage]
+        if not stage_deals:
+            continue
+        color = STAGE_COLORS.get(stage, "white")
+        console.print(f"\n[{color}][bold]{stage.upper()}[/bold] ({len(stage_deals)})[/{color}]")
+
+        t = Table(show_header=True, header_style="bold", box=box.SIMPLE)
+        t.add_column("ID", width=8)
+        t.add_column("Address")
+        t.add_column("Asking", justify="right")
+        t.add_column("ARV", justify="right")
+        t.add_column("MAO", justify="right")
+        t.add_column("Fee", justify="right")
+        t.add_column("Source")
+        t.add_column("Updated")
+
+        for d in stage_deals:
+            updated = d.get("updated_at", "")[:10]
+            t.add_row(
+                d.get("id", ""),
+                d.get("address", "")[:35],
+                currency(d.get("asking_price", 0)) if d.get("asking_price") else "-",
+                currency(d.get("arv", 0)) if d.get("arv") else "-",
+                currency(d.get("mao", 0)) if d.get("mao") else "-",
+                currency(d.get("wholesale_fee", 0)),
+                d.get("source", "")[:15],
+                updated,
+            )
+        console.print(t)
+
+    press_enter()
+
+
+def _pipeline_add():
+    console.print("\n[bold]Add New Deal to Pipeline[/bold]\n")
+    address = Prompt.ask("Property address")
+    source = Prompt.ask("Where'd you find it (HUD, tax lien, driving for dollars, etc.)")
+    asking = FloatPrompt.ask("Seller asking price (0 if unknown)", default=0)
+    arv = FloatPrompt.ask("ARV (0 if not yet analyzed)", default=0)
+    repairs = FloatPrompt.ask("Repair estimate (0 if unknown)", default=0)
+    fee = FloatPrompt.ask("Wholesale fee target", default=10000)
+    notes = Prompt.ask("Notes (seller situation, motivation, etc.)", default="")
+    stage = Prompt.ask("Stage", choices=STAGES, default="Lead")
+
+    mao = quick_mao(arv, repairs, fee) if arv and repairs else 0
+    deal = add_deal(
+        address=address, asking_price=asking, arv=arv, repairs=repairs,
+        mao=mao, wholesale_fee=fee, source=source, notes=notes, stage=stage,
+    )
+
+    console.print(f"\n[green]✓ Deal added! ID: [bold]{deal['id']}[/bold][/green]")
+    if mao:
+        is_deal = asking <= mao if asking else True
+        status = "[green]✓ Numbers work[/green]" if is_deal else f"[red]✗ Seller {currency(asking - mao)} over MAO[/red]"
+        console.print(f"  MAO: {currency(mao)}   {status}")
+    press_enter()
+
+
+def _pipeline_advance():
+    deal_id = Prompt.ask("Deal ID to advance")
+    deal = None
+    for d in get_all_deals():
+        if d.get("id") == deal_id:
+            deal = d
+            break
+    if not deal:
+        console.print("[red]Deal not found[/red]")
+        press_enter()
+        return
+
+    current = deal.get("stage", "Lead")
+    console.print(f"\nCurrent stage: [bold]{current}[/bold]")
+
+    new_stage = Prompt.ask("New stage", choices=STAGES, default=current)
+    note = Prompt.ask("Note about this update", default="")
+    update_deal(deal_id, stage=new_stage, notes=note)
+    console.print(f"[green]✓ Updated to {new_stage}[/green]")
+    press_enter()
+
+
+def _pipeline_notes():
+    deal_id = Prompt.ask("Deal ID")
+    note = Prompt.ask("Add note")
+    deal = update_deal(deal_id, notes=note)
+    if deal:
+        console.print("[green]✓ Note saved[/green]")
+    else:
+        console.print("[red]Deal not found[/red]")
+    press_enter()
+
+
+def _pipeline_delete():
+    deal_id = Prompt.ask("Deal ID to delete")
+    if Confirm.ask(f"Delete deal {deal_id}?", default=False):
+        if delete_deal(deal_id):
+            console.print("[green]✓ Deleted[/green]")
+        else:
+            console.print("[red]Deal not found[/red]")
+    press_enter()
+
+
+# ── 12. Neighborhood & Crime Score ───────────────────────────────────────────
+
+def menu_neighborhood():
+    section("NEIGHBORHOOD & CRIME SCORE")
+    console.print("[dim]Get crime stats, school ratings, flood risk, and neighborhood data for any property.[/dim]\n")
+
+    city = Prompt.ask("City")
+    state = Prompt.ask("State abbreviation (e.g. GA, TX)").upper()
+    zip_code = Prompt.ask("Zip code (optional)", default="")
+
+    console.print(f"\n[dim]Pulling neighborhood data for {city}, {state}...[/dim]")
+
+    # Crime data from FBI
+    console.print("\n[bold cyan]── CRIME DATA (FBI Official) ──[/bold cyan]")
+    crime = get_city_crime_data(city, state)
+
+    if "error" in crime:
+        console.print(f"[yellow]Automated lookup unavailable: {crime['error']}[/yellow]")
+        console.print("[dim]Use these free manual tools:[/dim]")
+        for name, url in crime.get("manual_lookup", {}).items():
+            console.print(f"  • [bold]{name}:[/bold] {url}")
+    else:
+        grade_c = grade_color(crime.get("safety_grade", "C"))
+        console.print(Panel(
+            f"  Safety Score: [{grade_c}][bold]{crime['safety_score']}/100  Grade: {crime['safety_grade']}[/bold][/{grade_c}]\n\n"
+            f"  Violent Crimes: {crime['violent_crimes']:,}  ({crime['violent_rate_per_100k']}/100k residents)\n"
+            f"  Property Crimes: {crime['property_crimes']:,}  ({crime['property_rate_per_100k']}/100k residents)\n"
+            f"  Population: {crime.get('population', 0):,}\n"
+            f"  [dim]Source: {crime['source']} — {crime.get('note', '')}[/dim]",
+            title=f"[bold]{city}, {state} — Crime Analysis[/bold]",
+            border_style=grade_c,
+        ))
+
+    # All neighborhood research links
+    console.print("\n[bold cyan]── NEIGHBORHOOD RESEARCH LINKS ──[/bold cyan]")
+    links = get_neighborhood_links(address="", city=city, state=state, zip_code=zip_code)
+    for category, items in links.items():
+        console.print(f"\n[bold yellow]{category}[/bold yellow]")
+        for name, url in items.items():
+            console.print(f"  • [bold]{name}:[/bold] {url}")
+
+    press_enter()
+
+
+# ── 13. DSCR Calculator ──────────────────────────────────────────────────────
+
+def menu_dscr():
+    section("DSCR CALCULATOR — RENTAL LOAN QUALIFIER")
+    console.print("[dim]DSCR loans use property income instead of your personal income. Great for investors.[/dim]\n")
+    console.print("[dim]Lenders require DSCR ≥ 1.25. Higher is better.[/dim]\n")
+
+    monthly_rent = FloatPrompt.ask("Expected monthly rent")
+    purchase_price = FloatPrompt.ask("Purchase price")
+    down_pct = FloatPrompt.ask("Down payment % (DSCR loans typically 20-25%)", default=25) / 100
+    rate = FloatPrompt.ask("Interest rate %", default=8.5) / 100
+
+    # Calculate mortgage payment
+    loan = purchase_price * (1 - down_pct)
+    monthly_rate = rate / 12
+    n = 30 * 12
+    if monthly_rate > 0:
+        mortgage = loan * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
+    else:
+        mortgage = loan / n
+
+    state = Prompt.ask("State (for tax estimate, e.g. TX)", default="")
+    if state:
+        tax_data = estimate_property_tax(state, purchase_price)
+        monthly_tax = tax_data["monthly_estimate"]
+        console.print(f"[dim]Auto-estimated tax: {currency(monthly_tax)}/month ({tax_data['effective_rate_pct']} effective rate for {state.upper()})[/dim]")
+    else:
+        monthly_tax = FloatPrompt.ask("Monthly property tax estimate", default=250)
+
+    monthly_insurance = FloatPrompt.ask("Monthly insurance estimate", default=150)
+    monthly_hoa = FloatPrompt.ask("Monthly HOA (0 if none)", default=0)
+
+    result = calc_dscr(
+        monthly_rent=monthly_rent,
+        monthly_mortgage=mortgage,
+        monthly_tax=monthly_tax,
+        monthly_insurance=monthly_insurance,
+        monthly_hoa=monthly_hoa,
+    )
+
+    color = result["dscr_color"]
+    console.print(Panel(
+        f"  [{color}][bold]DSCR: {result['dscr']}[/bold][/{color}]\n"
+        f"  [{color}]{result['lender_view']}[/{color}]\n\n"
+        f"  Monthly NOI: {currency(result['noi_monthly'])}\n"
+        f"  Annual NOI: {currency(result['noi_annual'])}\n"
+        f"  Annual Debt Service: {currency(result['annual_debt_service'])}\n"
+        f"  Vacancy Loss (8%): {currency(result['vacancy_loss'])}\n"
+        f"  Management Fee (10%): {currency(result['mgmt_fee'])}\n\n"
+        + (f"  [yellow]Rent needed to qualify (DSCR 1.25): {currency(result['rent_needed_for_125'])}\n"
+           f"  Rent gap: +{currency(result['rent_gap_to_qualify'])}/month needed[/yellow]"
+           if not result['loan_eligible'] and result['rent_gap_to_qualify'] > 0 else "  [green]✓ Qualifies for DSCR lending[/green]"),
+        title="[bold]DSCR Analysis[/bold]",
+        border_style=color,
+    ))
+
+    console.print("\n[bold]Top DSCR Lenders (no income verification):[/bold]")
+    console.print("  • Griffin Funding — griffinfunding.com")
+    console.print("  • Kiavi — kiavi.com")
+    console.print("  • Lima One Capital — limaone.com")
+    console.print("  • Visio Lending — visiolending.com")
+    console.print("  • Civic Financial — civicfs.com")
+
+    press_enter()
+
+
+# ── 14. Creative Financing ───────────────────────────────────────────────────
+
+def menu_creative_financing():
+    section("CREATIVE FINANCING CALCULATOR")
+    console.print("[dim]Structure deals when sellers won't take a low cash offer. Zero money down strategies.[/dim]\n")
+
+    strategies = {
+        "1": "Subject-To (Take Over Seller's Mortgage)",
+        "2": "Seller Financing (Seller Acts as the Bank)",
+        "3": "Seller Credits (Reduce Buyer's Cash Needed)",
+        "4": "Lease-Option (Rent-to-Own)",
+        "5": "Strategy Recommender (Tell me seller's situation)",
+    }
+
+    for k, v in strategies.items():
+        console.print(f"  [{k}] {v}")
+    console.print()
+
+    choice = Prompt.ask("Select", choices=list(strategies.keys()))
+
+    if choice == "1":
+        _creative_subject_to()
+    elif choice == "2":
+        _creative_seller_finance()
+    elif choice == "3":
+        _creative_seller_credits()
+    elif choice == "4":
+        _creative_lease_option()
+    elif choice == "5":
+        _creative_recommender()
+
+
+def _creative_subject_to():
+    console.print("\n[bold]Subject-To Calculator[/bold]\n")
+    loan_balance = FloatPrompt.ask("Seller's existing loan balance")
+    monthly_payment = FloatPrompt.ask("Seller's current monthly payment (P&I+T+I)")
+    existing_rate = FloatPrompt.ask("Seller's current interest rate %", default=3.5) / 100
+    arv = FloatPrompt.ask("ARV")
+    your_price = FloatPrompt.ask("Your purchase price (what you're paying seller above the loan)")
+    rent = FloatPrompt.ask("Expected monthly rent (0 if wholesale)", default=0)
+
+    result = calc_subject_to(
+        existing_loan_balance=loan_balance,
+        existing_monthly_payment=monthly_payment,
+        existing_rate=existing_rate,
+        arv=arv,
+        your_purchase_price=your_price,
+        monthly_rent=rent,
+    )
+
+    _display_creative_result(result)
+
+
+def _creative_seller_finance():
+    console.print("\n[bold]Seller Financing Calculator[/bold]\n")
+    price = FloatPrompt.ask("Purchase price")
+    down = FloatPrompt.ask("Down payment you're offering")
+    rate = FloatPrompt.ask("Interest rate you're offering seller %", default=6.0) / 100
+    years = IntPrompt.ask("Loan term (years)", default=30)
+    balloon = IntPrompt.ask("Balloon payment in X years (0 for none)", default=5)
+    rent = FloatPrompt.ask("Expected monthly rent (0 if wholesale/flip)", default=0)
+
+    result = calc_seller_finance(
+        purchase_price=price,
+        down_payment=down,
+        interest_rate=rate,
+        loan_years=years,
+        balloon_years=balloon if balloon > 0 else None,
+        monthly_rent=rent,
+    )
+
+    _display_creative_result(result)
+
+
+def _creative_seller_credits():
+    console.print("\n[bold]Seller Credits Calculator[/bold]\n")
+    console.print("[dim]Seller credits make your deal easier to sell to an end buyer.[/dim]\n")
+    price = FloatPrompt.ask("Purchase price")
+    repairs = FloatPrompt.ask("Estimated repairs buyer will do")
+    credit_pct = FloatPrompt.ask("Seller credit % to offer (e.g. 3)", default=3) / 100
+    loan_type = Prompt.ask("End buyer's loan type", choices=["conventional", "fha", "va", "usda", "cash"], default="conventional")
+
+    result = calc_seller_credits(
+        purchase_price=price,
+        repair_cost=repairs,
+        credit_percent=credit_pct,
+        loan_type=loan_type,
+    )
+
+    t = Table(show_header=False, box=box.ROUNDED)
+    t.add_column("Field", style="bold")
+    t.add_column("Value", justify="right")
+    for k, v in result.items():
+        if k in ("purchase_price", "seller_credit_pct", "seller_credit_amount",
+                 "effective_price_to_buyer", "covers_repairs_pct", "benefit"):
+            label = k.replace("_", " ").title()
+            val = currency(v) if isinstance(v, (int, float)) else str(v)
+            t.add_row(label, f"[green]{val}[/green]" if k == "seller_credit_amount" else val)
+    console.print(t)
+    console.print(f"\n[bold green]{result['benefit']}[/bold green]")
+    press_enter()
+
+
+def _creative_lease_option():
+    console.print("\n[bold]Lease-Option Calculator[/bold]\n")
+    price = FloatPrompt.ask("Option purchase price")
+    rent = FloatPrompt.ask("Monthly rent")
+    term = IntPrompt.ask("Option term (years)", default=2)
+    credit_pct = FloatPrompt.ask("Rent credit % that applies toward purchase", default=15) / 100
+    fee = FloatPrompt.ask("Option fee (non-refundable upfront)", default=5000)
+
+    result = calc_lease_option(
+        purchase_price=price,
+        monthly_rent=rent,
+        option_term_years=term,
+        option_credit_pct=credit_pct,
+        option_fee=fee,
+    )
+
+    _display_creative_result(result)
+
+
+def _creative_recommender():
+    console.print("\n[bold]Deal Structure Recommender[/bold]\n")
+    equity_pct = FloatPrompt.ask("Seller's equity % (e.g. 40 means they own 40% of value)", default=30) / 100
+    motivation = Prompt.ask("Seller's situation (e.g. behind on payments, divorce, inherited, need cash fast)")
+    existing_rate = FloatPrompt.ask("Seller's current interest rate % (0 if unknown)", default=0) / 100
+    behind = Confirm.ask("Are they behind on payments / facing foreclosure?", default=False)
+    needs_cash = Confirm.ask("Do they absolutely need cash now?", default=False)
+
+    recommendations = recommend_strategy(
+        seller_equity_pct=equity_pct,
+        seller_motivation=motivation,
+        existing_rate=existing_rate or 0.07,
+        is_behind_on_payments=behind,
+        needs_cash_now=needs_cash,
+    )
+
+    console.print("\n[bold cyan]Recommended Deal Structures (best → fallback):[/bold cyan]\n")
+    for i, rec in enumerate(recommendations[:4], 1):
+        color = "green" if i == 1 else "cyan" if i == 2 else "yellow"
+        console.print(f"  [{color}][bold]#{i}: {rec['strategy']}[/bold][/{color}]")
+        console.print(f"       {rec['reason']}\n")
+
+    press_enter()
+
+
+def _display_creative_result(result: dict):
+    strategy = result.get("strategy", "")
+    t = Table(show_header=False, box=box.ROUNDED)
+    t.add_column("Field", style="bold")
+    t.add_column("Value", justify="right")
+
+    skip_keys = {"pros", "risks", "best_for", "strategy"}
+    for k, v in result.items():
+        if k in skip_keys:
+            continue
+        label = k.replace("_", " ").title()
+        if isinstance(v, float):
+            val = currency(v) if v > 10 else str(round(v, 3))
+        else:
+            val = str(v)
+        t.add_row(label, val)
+
+    console.print(Panel(t, title=f"[bold green]{strategy}[/bold green]", border_style="green"))
+
+    if result.get("pros"):
+        console.print("\n[bold green]Pros:[/bold green]")
+        for p in result["pros"]:
+            console.print(f"  ✓ {p}")
+
+    if result.get("risks"):
+        console.print("\n[bold red]Risks:[/bold red]")
+        for r in result["risks"]:
+            console.print(f"  ⚠ {r}")
+
+    if result.get("best_for"):
+        console.print(f"\n[bold yellow]Best For:[/bold yellow] {result['best_for']}")
+
+    press_enter()
+
+
+# ── 15. Property Tax & Insurance ─────────────────────────────────────────────
+
+def menu_tax_insurance():
+    section("PROPERTY TAX & INSURANCE ESTIMATES")
+    console.print("[dim]Run the numbers before you make an offer. Know your holding costs.[/dim]\n")
+
+    state = Prompt.ask("State abbreviation (e.g. TX, FL, GA)").upper()
+    value = FloatPrompt.ask("Property value / purchase price")
+
+    # Tax estimate
+    tax = estimate_property_tax(state, value)
+    # Insurance estimate
+    insurance = estimate_insurance(value, state)
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+    t.add_column("Item")
+    t.add_column("Annual", justify="right")
+    t.add_column("Monthly", justify="right")
+    t.add_column("Notes")
+
+    t.add_row(
+        "Property Tax",
+        currency(tax["annual_estimate"]),
+        currency(tax["monthly_estimate"]),
+        f"{tax['effective_rate_pct']} effective rate for {state}",
+    )
+    t.add_row(
+        "Homeowner Insurance",
+        currency(insurance["homeowner_annual"]),
+        currency(insurance["homeowner_monthly"]),
+        "Owner-occupied",
+    )
+    t.add_row(
+        "Landlord Insurance",
+        currency(insurance["landlord_annual"]),
+        currency(insurance["landlord_monthly"]),
+        "Rental/investment property",
+    )
+    t.add_row(
+        "─" * 15, "─" * 10, "─" * 10, "",
+    )
+    total_annual = tax["annual_estimate"] + insurance["landlord_annual"]
+    total_monthly = tax["monthly_estimate"] + insurance["landlord_monthly"]
+    t.add_row(
+        "[bold]Total (landlord)[/bold]",
+        f"[bold]{currency(total_annual)}[/bold]",
+        f"[bold]{currency(total_monthly)}[/bold]",
+        "Use in your MAO calculation",
+    )
+
+    console.print(t)
+    console.print(f"\n[dim]⚠  {tax['note']}[/dim]")
+    console.print(f"[dim]⚠  {insurance['note']}[/dim]")
+
+    console.print("\n[bold]Get Real Insurance Quotes:[/bold]")
+    for url in insurance["quote_sources"]:
+        console.print(f"  • {url}")
+
+    console.print(f"\n[bold]Look Up Actual Tax Records:[/bold]")
+    console.print(f"  • {tax['lookup_url']}")
 
     press_enter()
 

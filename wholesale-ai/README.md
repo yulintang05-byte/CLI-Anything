@@ -1,67 +1,121 @@
 # Wholesale AI — Real Estate Wholesale + Gov Property Finder
 
-Free alternative to Tranchi.ai — find government-owned and distressed properties under market value, analyze deals, and close faster with AI.
+Free alternative to Tranchi.ai built on public government data + Claude AI.
+Find distressed and gov-owned properties under market value, analyze deals,
+and close faster — for pennies on the dollar vs. a monthly subscription.
 
-## What It Does
+## Features (Matches Tranchi.ai Core Capabilities)
 
+### Deal Analysis
 | Feature | Description |
 |---|---|
-| **Deal Calculator** | MAO, ARV, ROI, cash flow analysis using the 70% rule |
-| **Gov Property Finder** | HUD homes, Fannie Mae, Freddie Mac, GSA, USDA, US Marshals, IRS auctions |
-| **AI Deal Analyzer** | Full deal grade, strategy, red flags, and next steps (Claude-powered) |
-| **Negotiation Script** | Word-for-word script tailored to your seller's situation |
-| **Offer Letter Generator** | Ready-to-send LOI with assignment clause |
-| **HUD Fair Market Rents** | Official rent data by state/county for comps |
-| **Strategy Guides** | Assignment, double close, subject-to, tax liens, HUD homes, probate |
-| **Cash Buyer Strategy** | How to find and close cash buyers in any market |
+| **MAO Calculator** | 70% rule: `(ARV × 0.70) - Repairs - Fee` — know your max offer instantly |
+| **AI Deal Analyzer** | Full grade (A/B/C/F), strategy, red flags, next steps (Claude-powered) |
+| **Cash Flow Analysis** | Monthly P&L, cap rate, cash-on-cash return |
+| **DSCR Calculator** | Debt-Service Coverage Ratio — qualifies property for DSCR rental loans without using your income |
+| **Repair Estimator** | Light/medium/heavy/gut cost ranges + room-by-room reference guide |
+
+### Creative Financing (Zero Money Down Strategies)
+| Feature | Description |
+|---|---|
+| **Subject-To** | Take over seller's existing mortgage — keep their low rate |
+| **Seller Financing** | Seller acts as bank — no bank needed |
+| **Seller Credits** | Reduce cash buyer needs at closing — makes deals easier to sell |
+| **Lease-Option** | Control property with small option fee |
+| **Strategy Recommender** | Enter seller's situation — AI picks the best deal structure |
+
+### Neighborhood & Property Intelligence *(Like Tranchi.ai's Crime Analysis)*
+| Feature | Description |
+|---|---|
+| **Crime Score** | FBI Crime Data Explorer API — violent + property crime rates, safety grade A-F |
+| **Neighborhood Links** | SpotCrime, AreaVibes, NeighborhoodScout, CrimeMapping — all free |
+| **School Ratings** | GreatSchools, Niche, SchoolDigger links pre-built for any address |
+| **Flood Risk** | FEMA flood map links auto-generated per property |
+| **Walk Score** | Walkability + transit score links |
+| **Property Tax Estimate** | State effective tax rates — auto monthly/annual estimate |
+| **Insurance Estimate** | Landlord vs. homeowner insurance by state + quote links |
+| **Tax Records** | NETR Online county records links — ownership history, liens, deeds |
+
+### Government Property Sources (All Free to Search)
+| Source | Type |
+|---|---|
+| **HUD Home Store** | Gov foreclosures — typically 10-30% below market |
+| **HomePath (Fannie Mae)** | REO properties |
+| **HomeSteps (Freddie Mac)** | REO properties |
+| **USDA Rural** | Gov-owned rural properties |
+| **GSA Auctions** | Federal surplus at propertyforsale.gsa.gov |
+| **US Marshals** | Seized asset sales |
+| **IRS Auctions** | Seized property |
+| **FDIC** | Failed bank real estate |
+| **Tax Lien / Deed Sales** | State-specific portals (RealAuction, GovEase, Bid4Assets) |
+
+### Seller Outreach & Negotiation
+| Feature | Description |
+|---|---|
+| **Negotiation Script** | Word-for-word script tailored to seller's specific situation |
+| **Offer Letter / LOI** | Ready-to-send Letter of Intent with assignment clause |
+| **Motivated Seller Sources** | Probate, tax delinquent, NOD/pre-foreclosure, code violations, absentee owners |
+| **Cash Buyer Strategy** | How to find and close cash buyers in your specific market |
+
+### Deal Pipeline / CRM
+| Feature | Description |
+|---|---|
+| **Pipeline Tracker** | Save and track deals: Lead → Analyzing → Offer Sent → Under Contract → Marketing → Closed |
+| **Stage Advancement** | Move deals through the pipeline with notes and history |
+| **Fee Dashboard** | See total active deals, potential fees, and closed income |
+
+### AI Advisor (Claude-Powered)
+| Feature | Description |
+|---|---|
+| **Strategy Guides** | Assignment, double close, subject-to, tax liens, HUD homes, probate — explained step by step |
+| **Free Q&A** | Ask anything about wholesaling, contracts, finding deals |
+| **HUD Fair Market Rents** | Official rent comps by state/county (free HUD API token) |
 
 ## Quick Start
 
 ```bash
-# 1. Install
 cd wholesale-ai
-bash setup.sh
-
-# 2. Add your Claude AI key to .env (free at console.anthropic.com)
-echo "ANTHROPIC_API_KEY=sk-ant-your-key" >> .env
-
-# 3. Run
-python main.py
+bash setup.sh                   # one-time install
+cp .env.example .env            # then open .env and add your keys
+python main.py                  # interactive menu
 
 # Quick MAO from command line
-python main.py --mao --arv 150000 --repairs 25000 --fee 10000
+python main.py --mao --arv 200000 --repairs 30000 --fee 12000
+# → MAO: $98,000
 ```
 
-## Free Government Property Sources Built In
+## Free API Keys Needed
 
-- **HUD Home Store** — gov foreclosures, typically 10-30% below market
-- **HomePath** (Fannie Mae) — REO properties
-- **HomeSteps** (Freddie Mac) — REO properties
-- **USDA Rural Properties** — rural government-owned homes
-- **GSA Surplus** — federal property auctions at propertyforsale.gsa.gov
-- **US Marshals** — seized asset sales
-- **IRS Auctions** — seized property
-- **FDIC** — failed bank real estate
-
-## API Keys (Both Free)
-
-| Key | Where To Get | Required? |
+| Key | Where | Cost |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | For AI features |
-| `HUD_API_TOKEN` | [huduser.gov/portal/dataset/api.html](https://www.huduser.gov/portal/dataset/api.html) | For HUD rent data |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Free $5 credit, then ~$0.01-0.05/analysis |
+| `HUD_API_TOKEN` | [huduser.gov/portal/dataset/api.html](https://www.huduser.gov/portal/dataset/api.html) | Free forever |
 
 ## Cost vs Tranchi.ai
 
-- Tranchi.ai: Monthly subscription ($$$)
-- This tool: ~$0.01–$0.05 per AI analysis (typical month under $5)
+| | Tranchi.ai | Wholesale AI |
+|---|---|---|
+| Monthly cost | $$$/month subscription | Under $5/month (AI calls only) |
+| Data sources | Proprietary | Same gov data — HUD, FBI, GSA, FDIC |
+| Deal pipeline | Yes | Yes (local JSON, yours to keep) |
+| AI analysis | Yes | Yes (Claude Opus) |
+| Offer letters | Yes | Yes |
+| Creative financing | Limited | Subject-To, Seller Finance, Lease-Option, Credits |
+| Crime scores | Yes | Yes (FBI CDE API) |
 
-## Deal Formula
+## The Core Wholesale Formula
 
 ```
-MAO = (ARV × 0.70) - Repairs - Your Wholesale Fee
-```
+MAO = (ARV × 0.70) - Repairs - Wholesale Fee
 
-- **ARV** — what the property sells for fully fixed up (pull real comps)
-- **70%** — standard discount (use 65% in slower markets)
-- **Repairs** — always get contractor bids
-- **Your Fee** — typically $5k–$15k per deal
+Where:
+  ARV     = After Repair Value (what similar fixed-up homes sell for)
+  0.70    = 70% rule — leaves room for end buyer to profit
+  Repairs = Always get 2-3 contractor bids
+  Fee     = Your assignment fee ($5k-$15k typical)
+
+Example:
+  ARV $200k × 70% = $140k
+  $140k - $30k repairs - $10k fee = MAO $100k
+  You offer seller ≤ $100k, sell contract for $110k, pocket $10k
+```
