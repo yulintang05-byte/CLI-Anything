@@ -23,6 +23,7 @@
 # Step 3: Allow cli-anything-plugin entirely
 !/cli-anything-plugin/
 !/codex-skill/
+!/wholesale-ai/
 
 # Step 4: Allow each software dir (top level only)
 !/gimp/
