@@ -1,0 +1,23 @@
+services:
+  wholesale-ai:
+    build: .
+    image: wholesale-ai:latest
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    volumes:
+      - wholesale-data:/root/.wholesale-ai
+
+  # Quick MAO calculation without interactive mode
+  # Usage: docker compose run --rm mao --arv 200000 --repairs 30000
+  mao:
+    build: .
+    image: wholesale-ai:latest
+    env_file:
+      - .env
+    volumes:
+      - wholesale-data:/root/.wholesale-ai
+
+volumes:
+  wholesale-data:
