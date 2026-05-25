@@ -57,6 +57,18 @@ from modules.creative_financing import (
     calc_dscr, calc_subject_to, calc_seller_finance,
     calc_seller_credits, calc_lease_option, recommend_strategy,
 )
+from modules.user_profile import load_profile, save_profile, is_profile_complete
+from modules.auto_offer import (
+    generate_offer_email, generate_ai_offer_email,
+    batch_generate_offers, get_facebook_buyer_groups,
+)
+from modules.deal_browser import (
+    GOV_SOURCES, DEAL_CATEGORIES, HOT_MARKETS,
+    get_sources_by_category, analyze_deal_card,
+    get_section8_guide, get_llc_formation_guide,
+)
+from modules.brrrr import calc_brrrr, brrrr_example
+
 
 console = Console()
 
@@ -114,69 +126,168 @@ def section(title: str):
 def main_menu():
     while True:
         show_banner()
+        profile = load_profile()
+        profile_status = f"[green]{profile['name']} | {profile['company']}[/green]" if is_profile_complete(profile) else "[yellow]⚠ Profile not set — do [17] first![/yellow]"
+
         console.print(Panel(
             "\n"
-            "  [bold cyan][1][/bold cyan]  Deal Calculator (MAO / ARV / ROI)\n"
-            "  [bold cyan][2][/bold cyan]  Find Gov & Distressed Properties\n"
-            "  [bold cyan][3][/bold cyan]  AI Deal Analyzer\n"
-            "  [bold cyan][4][/bold cyan]  Generate Negotiation Script\n"
-            "  [bold cyan][5][/bold cyan]  Generate Offer Letter / LOI\n"
-            "  [bold cyan][6][/bold cyan]  HUD Fair Market Rents Lookup\n"
-            "  [bold cyan][7][/bold cyan]  Wholesale Strategy Guide\n"
-            "  [bold cyan][8][/bold cyan]  Find Cash Buyers Strategy\n"
-            "  [bold cyan][9][/bold cyan]  Repair Cost Guide\n"
-            "  [bold cyan][10][/bold cyan] Ask the AI Advisor Anything\n"
-            "  [bold cyan][11][/bold cyan] Deal Pipeline / CRM\n"
-            "  [bold cyan][12][/bold cyan] Neighborhood & Crime Score\n"
-            "  [bold cyan][13][/bold cyan] DSCR Calculator (Rental Loan Qualifier)\n"
-            "  [bold cyan][14][/bold cyan] Creative Financing (Subject-To / Seller Finance)\n"
-            "  [bold cyan][15][/bold cyan] Property Tax & Insurance Estimates\n"
-            "  [bold cyan][16][/bold cyan] Setup & API Keys\n"
+            f"  Profile: {profile_status}\n\n"
+            "  [bold green]── FIND DEALS ──────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][1][/bold cyan]  Browse Gov & Distressed Properties (by category)\n"
+            "  [bold cyan][2][/bold cyan]  Hot Markets Guide ($4k-$20k homes)\n\n"
+            "  [bold green]── ANALYZE ─────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][3][/bold cyan]  Deal Calculator (MAO / ARV / ROI / HIGH MARGIN check)\n"
+            "  [bold cyan][4][/bold cyan]  AI Deal Analyzer (full grade + strategy)\n"
+            "  [bold cyan][5][/bold cyan]  Neighborhood & Crime Score\n"
+            "  [bold cyan][6][/bold cyan]  DSCR Calculator (Rental Loan Qualifier)\n"
+            "  [bold cyan][7][/bold cyan]  Property Tax & Insurance Estimates\n"
+            "  [bold cyan][8][/bold cyan]  BRRRR Calculator (Recycle Your Capital)\n\n"
+            "  [bold green]── MAKE OFFERS ──────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][9][/bold cyan]  [bold]AUTO OFFER[/bold] — Generate & Send Offer Emails\n"
+            "  [bold cyan][10][/bold cyan] Generate Negotiation Script\n"
+            "  [bold cyan][11][/bold cyan] Generate Offer Letter / LOI\n\n"
+            "  [bold green]── CLOSE & SCALE ────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][12][/bold cyan] Deal Pipeline / CRM\n"
+            "  [bold cyan][13][/bold cyan] Creative Financing (Subject-To / Seller Finance)\n"
+            "  [bold cyan][14][/bold cyan] Section 8 / Gov Tenant Guide\n"
+            "  [bold cyan][15][/bold cyan] Find Cash Buyers + Facebook Groups\n"
+            "  [bold cyan][16][/bold cyan] LLC Formation Guide\n\n"
+            "  [bold green]── OTHER ────────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][17][/bold cyan] My Investor Profile (feeds Auto Offer)\n"
+            "  [bold cyan][18][/bold cyan] Wholesale Strategy Guide\n"
+            "  [bold cyan][19][/bold cyan] Repair Cost Guide\n"
+            "  [bold cyan][20][/bold cyan] Ask the AI Advisor Anything\n"
+            "  [bold cyan][21][/bold cyan] HUD Fair Market Rents Lookup\n"
+            "  [bold cyan][22][/bold cyan] Setup & API Keys\n"
             "  [bold cyan][0][/bold cyan]  Exit\n",
-            title="[bold green]MAIN MENU[/bold green]",
+            title="[bold green]WHOLESALE AI — MAIN MENU[/bold green]",
             border_style="green",
         ))
 
-        choice = Prompt.ask("[bold]Select[/bold]", choices=["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"])
+        choice = Prompt.ask("[bold]Select[/bold]", choices=[str(i) for i in range(23)])
 
         if choice == "0":
-            console.print("\n[bold green]Go get that bag. 💰[/bold green]\n")
+            console.print("\n[bold green]Go get that bag.[/bold green]\n")
             sys.exit(0)
         elif choice == "1":
-            menu_deal_calculator()
+            menu_browse_deals()
         elif choice == "2":
-            menu_property_search()
+            menu_hot_markets()
         elif choice == "3":
-            menu_ai_deal_analyzer()
+            menu_deal_calculator()
         elif choice == "4":
-            menu_negotiation_script()
+            menu_ai_deal_analyzer()
         elif choice == "5":
-            menu_offer_letter()
-        elif choice == "6":
-            menu_hud_fmr()
-        elif choice == "7":
-            menu_strategy_guide()
-        elif choice == "8":
-            menu_cash_buyers()
-        elif choice == "9":
-            menu_repair_guide()
-        elif choice == "10":
-            menu_ask_advisor()
-        elif choice == "11":
-            menu_pipeline()
-        elif choice == "12":
             menu_neighborhood()
-        elif choice == "13":
+        elif choice == "6":
             menu_dscr()
-        elif choice == "14":
-            menu_creative_financing()
-        elif choice == "15":
+        elif choice == "7":
             menu_tax_insurance()
+        elif choice == "8":
+            menu_brrrr()
+        elif choice == "9":
+            menu_auto_offer()
+        elif choice == "10":
+            menu_negotiation_script()
+        elif choice == "11":
+            menu_offer_letter()
+        elif choice == "12":
+            menu_pipeline()
+        elif choice == "13":
+            menu_creative_financing()
+        elif choice == "14":
+            menu_section8()
+        elif choice == "15":
+            menu_cash_buyers()
         elif choice == "16":
+            menu_llc_guide()
+        elif choice == "17":
+            menu_investor_profile()
+        elif choice == "18":
+            menu_strategy_guide()
+        elif choice == "19":
+            menu_repair_guide()
+        elif choice == "20":
+            menu_ask_advisor()
+        elif choice == "21":
+            menu_hud_fmr()
+        elif choice == "22":
             menu_setup()
 
 
-# ── 1. Deal Calculator ────────────────────────────────────────────────────────
+# ── 1. Browse Deals ──────────────────────────────────────────────────────────
+
+def menu_browse_deals():
+    section("BROWSE GOV & DISTRESSED PROPERTIES")
+    console.print("[dim]Filter by deal type — same categories as Tranchi.ai's Browse Deals page.[/dim]\n")
+
+    console.print("[bold]Deal Categories:[/bold]\n")
+    for i, cat in enumerate(DEAL_CATEGORIES, 1):
+        console.print(f"  [{i:2}] {cat}")
+    console.print()
+
+    choice = Prompt.ask("Select category (number)", default="1")
+    try:
+        idx = int(choice) - 1
+        category = DEAL_CATEGORIES[idx] if 0 <= idx < len(DEAL_CATEGORIES) else "All Deals"
+    except (ValueError, IndexError):
+        category = "All Deals"
+
+    sources = get_sources_by_category(category) if category != "All Deals" else GOV_SOURCES
+
+    console.print(f"\n[bold green]Sources for: {category}[/bold green]\n")
+    for group, items in sources.items():
+        console.print(f"[bold yellow]{group}[/bold yellow]")
+        for name, url in items.items():
+            console.print(f"  • [bold]{name}[/bold]\n    {url}")
+        console.print()
+
+    if Confirm.ask("Save a deal you found to your pipeline?", default=False):
+        _pipeline_add()
+
+    press_enter()
+
+
+def menu_hot_markets():
+    section("HOT MARKETS — $4K-$20K HOMES")
+    console.print("[dim]Markets shown in Tranchi.ai where tax deed / land bank homes are cheapest.[/dim]\n")
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+    t.add_column("City")
+    t.add_column("State")
+    t.add_column("Avg Price", justify="right")
+    t.add_column("Avg Rent", justify="right")
+    t.add_column("Est. Cash Flow", justify="right")
+    t.add_column("DSCR", justify="right")
+    t.add_column("Source URL")
+
+    for m in HOT_MARKETS:
+        price = m["avg_price"]
+        rent = m["avg_rent"]
+        # Quick deal card calc
+        mortgage = price * 0.20 * (0.085 / 12)  # 20% down, ~8.5% HML or cash-free
+        tax = price * 0.016 / 12
+        insurance = 50
+        metrics = analyze_deal_card(price, price * 8, rent, mortgage, tax, insurance)
+        cf_color = "green" if metrics["cash_flow"] > 0 else "red"
+
+        t.add_row(
+            m["city"],
+            m["state"],
+            currency(price),
+            currency(rent),
+            f"[{cf_color}]{currency(metrics['cash_flow'])}/mo[/{cf_color}]",
+            f"{metrics['dscr']}x",
+            m["url"][:45],
+        )
+
+    console.print(t)
+    console.print("\n[bold yellow]Strategy:[/bold yellow] Buy for $4k-$20k → Section 8 tenant → $800-$1,100/mo gov-guaranteed rent")
+    console.print("[dim]DSCR is insanely high because mortgage on a $5k house is under $50/month.[/dim]")
+    press_enter()
+
+
+# ── 3. Deal Calculator ────────────────────────────────────────────────────────
 
 def menu_deal_calculator():
     section("DEAL CALCULATOR")
@@ -703,6 +814,335 @@ def menu_setup():
             )
             console.print(f"[green]Created .env — open it and add your keys[/green]")
 
+    press_enter()
+
+
+# ── 9. Auto Offer ────────────────────────────────────────────────────────────
+
+def menu_auto_offer():
+    section("AUTO OFFER SYSTEM")
+    profile = load_profile()
+
+    if not is_profile_complete(profile):
+        console.print(Panel(
+            "[yellow]Set up your Investor Profile first (menu option 17).[/yellow]\n"
+            "Your profile feeds into every offer email automatically.",
+            border_style="yellow",
+        ))
+        if Confirm.ask("Set up profile now?", default=True):
+            menu_investor_profile()
+            profile = load_profile()
+        else:
+            press_enter()
+            return
+
+    console.print(Panel(
+        f"  Sending as: [bold]{profile['name']}[/bold] | {profile['company']}\n"
+        f"  Financing:  {profile['preferred_financing']}\n"
+        f"  EMD: ${profile['emd_amount']:,}  |  Closing: {profile['closing_days']} days  |  Seller Credit: {profile['seller_credit_pct']}%",
+        title="[bold green]Your Offer Profile[/bold green]",
+        border_style="green",
+    ))
+
+    console.print("\n  [1] Generate single offer email\n  [2] Batch offers (multiple properties)\n  [3] View Facebook buyer groups\n")
+    sub = Prompt.ask("Select", choices=["1", "2", "3"])
+
+    if sub == "1":
+        _auto_offer_single(profile)
+    elif sub == "2":
+        _auto_offer_batch(profile)
+    elif sub == "3":
+        _show_fb_groups()
+
+
+def _auto_offer_single(profile: dict):
+    console.print("\n[bold]Property & Seller Details[/bold]\n")
+    address = Prompt.ask("Property address")
+    list_price = FloatPrompt.ask("List / asking price")
+    offer_price = FloatPrompt.ask("Your offer price", default=list_price)
+    seller_name = Prompt.ask("Seller / agent name", default="Property Owner")
+    seller_email = Prompt.ask("Seller email", default="")
+    seller_phone = Prompt.ask("Seller phone", default="")
+    financing = Prompt.ask(
+        "Financing type",
+        choices=["DSCR Loan", "Seller Finance", "Hard Money", "Cash", "$5K Down", "Conventional"],
+        default=profile.get("preferred_financing", "DSCR Loan"),
+    )
+    notes = Prompt.ask("Custom note to add (optional)", default="")
+
+    use_ai = bool(os.getenv("ANTHROPIC_API_KEY")) and Confirm.ask("Use AI to personalize this email?", default=True)
+
+    if use_ai:
+        console.print("\n[dim]Generating AI-personalized offer...[/dim]")
+        body = generate_ai_offer_email(
+            property_data={"address": address, "price": list_price, "financing_type": financing},
+            offer_price=offer_price,
+            profile=profile,
+        )
+        subject = f"Purchase Offer – {address}"
+        to_email = seller_email
+        to_name = seller_name
+    else:
+        result = generate_offer_email(
+            seller_name=seller_name,
+            seller_email=seller_email,
+            seller_phone=seller_phone,
+            property_address=address,
+            list_price=list_price,
+            offer_price=offer_price,
+            financing_type=financing,
+            profile=profile,
+            custom_notes=notes,
+        )
+        body = result["body"]
+        subject = result["subject"]
+        to_email = result["to_email"]
+        to_name = result["to_name"]
+
+    console.print(Panel(
+        f"[bold]TO:[/bold]      {to_name}  {seller_phone}\n"
+        f"[bold]EMAIL:[/bold]   {to_email}\n"
+        f"[bold]SUBJECT:[/bold] {subject}\n\n"
+        f"[bold]BODY:[/bold]\n\n{body}",
+        title="[bold yellow]OFFER EMAIL — READY TO SEND[/bold yellow]",
+        border_style="yellow",
+    ))
+
+    if Confirm.ask("\nSave to file?", default=True):
+        safe = address.replace(" ", "_").replace(",", "")[:40]
+        fname = f"offer_{safe}.txt"
+        Path(fname).write_text(f"TO: {to_name}\nEMAIL: {to_email}\nSUBJECT: {subject}\n\n{body}")
+        console.print(f"[green]✓ Saved to {fname}[/green]")
+
+    # Add to pipeline
+    if Confirm.ask("Add to Deal Pipeline?", default=True):
+        add_deal(address=address, asking_price=list_price, source="manual", stage="Offer Sent")
+        console.print("[green]✓ Added to pipeline as 'Offer Sent'[/green]")
+
+    press_enter()
+
+
+def _auto_offer_batch(profile: dict):
+    console.print("\n[bold]Batch Offer Generator[/bold]")
+    console.print("[dim]Enter multiple properties. Empty address = done.[/dim]\n")
+
+    properties = []
+    while True:
+        address = Prompt.ask(f"Property #{len(properties)+1} address (Enter to finish)", default="")
+        if not address:
+            break
+        price = FloatPrompt.ask("  Asking price")
+        email = Prompt.ask("  Seller email (optional)", default="")
+        phone = Prompt.ask("  Seller phone (optional)", default="")
+        properties.append({"address": address, "price": price, "contact_email": email, "contact_phone": phone})
+
+    if not properties:
+        press_enter()
+        return
+
+    discount = FloatPrompt.ask(f"\nOffer % below asking (0 = at asking, 5 = 5% below)", default=0) / 100
+    offers = batch_generate_offers(properties, offer_discount=discount, profile=profile)
+
+    console.print(f"\n[bold green]Generated {len(offers)} offer emails:[/bold green]\n")
+
+    for i, offer in enumerate(offers, 1):
+        console.print(f"[bold cyan]Offer #{i}:[/bold cyan] {offer['property_address']}")
+        console.print(f"  Offer: {currency(offer['offer_price'])}  |  To: {offer['to_email'] or 'no email'}")
+        console.print()
+
+    if Confirm.ask("Save all to files?", default=True):
+        for i, offer in enumerate(offers, 1):
+            safe = offer["property_address"].replace(" ", "_").replace(",", "")[:30]
+            fname = f"offer_{i:02}_{safe}.txt"
+            Path(fname).write_text(f"TO: {offer['to_name']}\nEMAIL: {offer['to_email']}\nSUBJECT: {offer['subject']}\n\n{offer['body']}")
+        console.print(f"[green]✓ Saved {len(offers)} offer files[/green]")
+        for i, offer in enumerate(offers, 1):
+            add_deal(address=offer["property_address"], asking_price=offer.get("property", {}).get("price", 0), stage="Offer Sent")
+        console.print(f"[green]✓ Added {len(offers)} deals to pipeline[/green]")
+
+    press_enter()
+
+
+def _show_fb_groups():
+    section("FACEBOOK BUYER & INVESTOR GROUPS")
+    console.print("[dim]Same groups Tranchi.ai recommends for finding cash buyers and flipping contracts.[/dim]\n")
+
+    groups = get_facebook_buyer_groups()
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+    t.add_column("Group Name", style="bold")
+    t.add_column("Market")
+    t.add_column("URL")
+
+    for g in groups:
+        t.add_row(g["name"], g["market"], g["url"])
+
+    console.print(t)
+    console.print("\n[bold yellow]How to use:[/bold yellow]")
+    console.print("  1. Join 5-10 groups in your target market")
+    console.print("  2. Post: 'Looking for cash buyers for [city] — got [beds/baths/sqft] at $[price]. DM me.'")
+    console.print("  3. When buyers respond, collect their criteria (zip, price range, beds)")
+    console.print("  4. Build your list — these become your repeat buyers for every deal")
+    press_enter()
+
+
+# ── 8. BRRRR Calculator ──────────────────────────────────────────────────────
+
+def menu_brrrr():
+    section("BRRRR CALCULATOR")
+    console.print("[dim]Buy, Rehab, Rent, Refinance, Repeat — the strategy to build a portfolio with recycled capital.[/dim]\n")
+
+    console.print(Panel(brrrr_example(), title="[bold cyan]Example Deal[/bold cyan]", border_style="cyan"))
+
+    if not Confirm.ask("\nRun your own BRRRR numbers?", default=True):
+        press_enter()
+        return
+
+    console.print()
+    purchase = FloatPrompt.ask("Purchase price")
+    repairs = FloatPrompt.ask("Estimated rehab cost")
+    arv = FloatPrompt.ask("After Repair Value (ARV)")
+    rent = FloatPrompt.ask("Expected monthly rent")
+    ltv = FloatPrompt.ask("Refinance LTV % (75% standard, 80% aggressive)", default=75) / 100
+    rate = FloatPrompt.ask("Refinance interest rate %", default=7.5) / 100
+
+    state = Prompt.ask("State (for tax estimate, optional)", default="")
+    if state:
+        tax_data = estimate_property_tax(state, arv)
+        monthly_tax = tax_data["monthly_estimate"]
+        ins_data = estimate_insurance(arv, state)
+        monthly_ins = ins_data["landlord_monthly"]
+        console.print(f"[dim]Auto-estimated: tax ${monthly_tax}/mo, insurance ${monthly_ins}/mo[/dim]")
+    else:
+        monthly_tax = FloatPrompt.ask("Monthly property tax estimate", default=100)
+        monthly_ins = FloatPrompt.ask("Monthly insurance estimate", default=80)
+
+    result = calc_brrrr(
+        purchase_price=purchase,
+        repair_cost=repairs,
+        arv=arv,
+        monthly_rent=rent,
+        refinance_ltv=ltv,
+        refinance_rate=rate,
+        monthly_tax=monthly_tax,
+        monthly_insurance=monthly_ins,
+    )
+
+    # Verdict color
+    verdict = result["verdict"]
+    v_color = "green" if "PERFECT" in verdict or "EXCELLENT" in verdict else \
+              "cyan" if "GOOD" in verdict else \
+              "yellow" if "PARTIAL" in verdict or "BUY" in verdict else "red"
+
+    console.print(Panel(
+        f"  [{v_color}][bold]{verdict}[/bold][/{v_color}]\n\n"
+        f"  All-In Cost:           {currency(result['all_in_cost'])}\n"
+        f"  ARV:                   {currency(result['arv'])}\n"
+        f"  Equity Created:        [green]{currency(result['equity_created'])} ({result['equity_pct']}% below market)[/green]\n\n"
+        f"  Refinance Loan ({result['refi_ltv_pct']} LTV):  {currency(result['refi_loan_amount'])}\n"
+        f"  [bold]Cash Returned:         {'[green]+' if result['cash_returned'] > 0 else '[red]'}{currency(result['cash_returned'])}{'[/green]' if result['cash_returned'] > 0 else '[/red]'}[/bold]\n"
+        f"  Cash Still In Deal:    {currency(result['cash_left_in'])}\n"
+        f"  Capital Recycled:      {result['capital_recycled_pct']}%\n\n"
+        f"  Monthly Cash Flow:     [{'green' if result['monthly_cash_flow'] > 0 else 'red'}]{currency(result['monthly_cash_flow'])}/mo[/{'green' if result['monthly_cash_flow'] > 0 else 'red'}]\n"
+        f"  Annual Cash Flow:      {currency(result['annual_cash_flow'])}\n"
+        f"  Cap Rate:              {result['cap_rate']}%\n"
+        f"  Cash-on-Cash Return:   {result['coc_return']}%",
+        title="[bold]BRRRR Analysis[/bold]",
+        border_style=v_color,
+    ))
+
+    press_enter()
+
+
+# ── 14. Section 8 Guide ──────────────────────────────────────────────────────
+
+def menu_section8():
+    section("SECTION 8 / GOVERNMENT TENANT GUIDE")
+    guide = get_section8_guide()
+
+    console.print(Panel(guide["what_it_is"], title="What is Section 8?", border_style="blue"))
+    console.print(f"\n[bold yellow]Pro Tip:[/bold yellow] {guide['pro_tip']}\n")
+
+    console.print("[bold green]Benefits:[/bold green]")
+    for b in guide["benefits"]:
+        console.print(f"  ✓ {b}")
+
+    console.print("\n[bold cyan]How to Become a Section 8 Landlord:[/bold cyan]")
+    for step in guide["how_to_apply"]:
+        console.print(f"  {step}")
+
+    console.print("\n[bold]Key Links:[/bold]")
+    console.print(f"  Find your local HUD/PHA: {guide['find_your_pha']}")
+    console.print(f"  HUD Fair Market Rents:   {guide['fmr_lookup']}")
+    console.print(f"  Section 8 Info:          {guide['section8_apply']}")
+    console.print(f"  Find Section 8 Tenants:  {guide['tenant_finder']}")
+    console.print(f"  Affordable Housing:      {guide['rental_rates']}")
+
+    press_enter()
+
+
+# ── 16. LLC Formation Guide ──────────────────────────────────────────────────
+
+def menu_llc_guide():
+    section("LLC FORMATION GUIDE")
+    guide = get_llc_formation_guide()
+
+    console.print("[bold]Why You Need an LLC:[/bold]")
+    for r in guide["why_llc"]:
+        console.print(f"  ✓ {r}")
+
+    console.print("\n[bold]LLC Types for Real Estate:[/bold]")
+    for t, desc in guide["types"].items():
+        console.print(f"  [bold cyan]{t}:[/bold cyan] {desc}")
+
+    console.print("\n[bold]How to Form (5 Steps):[/bold]")
+    for step in guide["how_to_form"]:
+        console.print(f"  {step}")
+
+    console.print(f"\n[bold]Cost:[/bold] {guide['cost']}")
+
+    console.print("\n[bold]Resources:[/bold]")
+    for name, url in guide["resources"].items():
+        console.print(f"  • [bold]{name}:[/bold] {url}")
+
+    press_enter()
+
+
+# ── 17. Investor Profile ─────────────────────────────────────────────────────
+
+def menu_investor_profile():
+    section("MY INVESTOR PROFILE")
+    console.print("[dim]Your profile auto-fills every offer email you generate — set it once.[/dim]\n")
+
+    profile = load_profile()
+
+    console.print("[bold]Enter your details[/bold] (press Enter to keep current value)\n")
+
+    def ask(label: str, key: str, default_override=None):
+        current = profile.get(key, "") or ""
+        val = Prompt.ask(label, default=str(default_override if default_override is not None else current))
+        return val
+
+    profile["name"] = ask("Your full name", "name")
+    profile["company"] = ask("Company / LLC name", "company")
+    profile["email"] = ask("Your email", "email")
+    profile["phone"] = ask("Your phone", "phone")
+    profile["purchasing_entity"] = ask("Purchasing entity (e.g. 'Smith Holdings LLC')", "purchasing_entity", profile.get("company", ""))
+    profile["preferred_financing"] = Prompt.ask(
+        "Preferred financing",
+        choices=["DSCR Loan", "Seller Finance", "Hard Money", "Cash", "$5K Down", "Conventional"],
+        default=profile.get("preferred_financing", "DSCR Loan"),
+    )
+    profile["portfolio_size"] = int(FloatPrompt.ask("Number of properties in your portfolio", default=profile.get("portfolio_size", 0)))
+    profile["years_experience"] = int(FloatPrompt.ask("Years of investing experience", default=profile.get("years_experience", 1)))
+    profile["emd_amount"] = int(FloatPrompt.ask("Earnest Money Deposit amount", default=profile.get("emd_amount", 1000)))
+    profile["closing_days"] = int(FloatPrompt.ask("Preferred closing days", default=profile.get("closing_days", 30)))
+    profile["seller_credit_pct"] = int(FloatPrompt.ask("Seller credit % to request (3 is standard)", default=profile.get("seller_credit_pct", 3)))
+    profile["bio_line"] = ask("One-liner bio for offer emails (optional)", "bio_line")
+
+    save_profile(profile)
+    console.print(f"\n[bold green]✓ Profile saved![/bold green]")
+    console.print(f"  Name:     {profile['name']} | {profile['company']}")
+    console.print(f"  Finance:  {profile['preferred_financing']} | EMD ${profile['emd_amount']:,} | Close in {profile['closing_days']} days")
     press_enter()
 
 
