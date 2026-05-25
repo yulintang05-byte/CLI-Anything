@@ -205,6 +205,238 @@ def analyze_deal_card(
     }
 
 
+def all_strategies_analysis(
+    price: float,
+    arv: float,
+    market_rent: float,
+    sqft: float = 1000,
+    bedrooms: int = 3,
+    state: str = "MI",
+    condition: str = "medium",
+    repair_override: float = None,
+    buyer_credit_score: int = 730,
+    buyer_cash: float = 12000,
+) -> dict:
+    """
+    Calculate all 4 exit strategies simultaneously for a single deal.
+    This is the core Tranchi.ai feature — every property card shows
+    Flip, BRRRR, DSCR, and Section 8 pre-calculated side by side.
+    """
+    # ── Repair estimate ────────────────────────────────────────────────────
+    # Per-sqft rates for hot markets like Detroit/Birmingham (lower COL = lower labor)
+    REPAIR_RATES = {"light": 12, "medium": 20, "heavy": 38, "gut": 60}
+    repairs = repair_override if repair_override is not None else sqft * REPAIR_RATES.get(condition.lower(), 30)
+    all_in = price + repairs
+
+    # ── Holding cost estimates (based on ARV) ─────────────────────────────
+    # Property tax: roughly 2% of ARV annually for hot markets
+    est_monthly_tax = max(30, round(arv * 0.02 / 12, 2))
+    # Insurance: landlord policy ~0.8% of ARV annually
+    est_monthly_ins = max(40, round(arv * 0.008 / 12, 2))
+
+    # ── Effective rent (8% vacancy) ───────────────────────────────────────
+    vacancy_rate = 0.08
+    mgmt_rate = 0.08
+    eff_rent = market_rent * (1 - vacancy_rate)
+    mgmt_fee = eff_rent * mgmt_rate
+
+    # ── STRATEGY 1: FIX & FLIP ────────────────────────────────────────────
+    closing_sell = arv * 0.06         # Agent + closing costs when selling
+    holding_costs_flip = (est_monthly_tax + est_monthly_ins) * 6  # 6-month hold
+    flip_profit = arv - price - repairs - closing_sell - holding_costs_flip
+    flip_roi = (flip_profit / (price + repairs) * 100) if (price + repairs) > 0 else 0
+    # MAO: what you can pay and still make money wholesaling to a flipper
+    mao = (arv * 0.70) - repairs - 3000  # 3k for buyer closing costs
+    wholesale_profit = mao - price if mao > price else 0
+
+    if flip_profit >= 25000:
+        flip_verdict = "STRONG FLIP"
+    elif flip_profit >= 15000:
+        flip_verdict = "GOOD FLIP"
+    elif flip_profit >= 5000:
+        flip_verdict = "MARGINAL"
+    else:
+        flip_verdict = "SKIP"
+
+    # ── STRATEGY 2: BRRRR (Buy, Rehab, Rent, Refinance, Repeat) ──────────
+    refi_ltv = 0.75
+    refi_rate = 0.075          # Current DSCR/investment loan rate
+    refi_n = 30 * 12
+    monthly_refi_rate = refi_rate / 12
+    refi_loan = arv * refi_ltv
+
+    if monthly_refi_rate > 0:
+        refi_payment = refi_loan * (monthly_refi_rate * (1 + monthly_refi_rate) ** refi_n) / \
+                       ((1 + monthly_refi_rate) ** refi_n - 1)
+    else:
+        refi_payment = refi_loan / refi_n
+
+    cash_back = refi_loan - all_in
+    capital_recycled_pct = max(0, min(100, (cash_back / all_in * 100))) if all_in > 0 else 0
+
+    brrrr_expenses = refi_payment + est_monthly_tax + est_monthly_ins + mgmt_fee
+    brrrr_cf = eff_rent - brrrr_expenses
+
+    if cash_back >= all_in and brrrr_cf > 0:
+        brrrr_verdict = "PERFECT BRRRR"
+    elif cash_back >= all_in * 0.90 and brrrr_cf > 0:
+        brrrr_verdict = "EXCELLENT"
+    elif cash_back >= all_in * 0.75 and brrrr_cf > 0:
+        brrrr_verdict = "GOOD"
+    elif brrrr_cf > 0:
+        brrrr_verdict = "PARTIAL — cash flows"
+    else:
+        brrrr_verdict = "DOESN'T WORK"
+
+    # ── STRATEGY 3: DSCR RENTAL LOAN ─────────────────────────────────────
+    # DSCR loan at 20% down (or cash-then-refi — same result)
+    dscr_down = max(price * 0.20, price)  # for tiny prices, often just buy cash
+    if price < 50000:
+        # Small properties: usually buy cash, then DSCR refi at 75% ARV
+        dscr_payment = refi_payment
+        dscr_down = all_in
+    else:
+        dscr_loan_amt = price * 0.80
+        if monthly_refi_rate > 0:
+            dscr_payment = dscr_loan_amt * (monthly_refi_rate * (1 + monthly_refi_rate) ** refi_n) / \
+                           ((1 + monthly_refi_rate) ** refi_n - 1)
+        else:
+            dscr_payment = dscr_loan_amt / refi_n
+
+    noi_annual = (eff_rent - est_monthly_tax - est_monthly_ins - mgmt_fee) * 12
+    dscr_ratio = noi_annual / (dscr_payment * 12) if dscr_payment > 0 else 0
+    dscr_qualifies = dscr_ratio >= 1.25 and buyer_credit_score >= 680
+
+    dscr_cf = eff_rent - (dscr_payment + est_monthly_tax + est_monthly_ins + mgmt_fee)
+    cash_in_dscr = dscr_down + 3000  # down + closing
+    coc_dscr = (dscr_cf * 12 / cash_in_dscr * 100) if cash_in_dscr > 0 else 0
+
+    # ── STRATEGY 4: SECTION 8 (Housing Choice Voucher) ────────────────────
+    # HUD Fair Market Rent is typically 10-20% above market rent
+    fmr_est = round(market_rent * 1.15)
+    sec8_eff_rent = fmr_est * (1 - vacancy_rate * 0.5)  # Lower vacancy on Section 8
+    sec8_cf = sec8_eff_rent - brrrr_expenses  # Same PITI as BRRRR scenario
+    sec8_annual = fmr_est * 12
+    sec8_coc = (sec8_cf * 12 / all_in * 100) if all_in > 0 else 0
+
+    # ── BUYER POSITION (personalized to their actual numbers) ─────────────
+    # Hard money: typically 10-12% rate, 80% LTV of ARV, 2 points
+    hml_loan = arv * 0.80
+    hml_needed_down = max(0, all_in - hml_loan)  # cash needed beyond HML
+    hml_points_cost = hml_loan * 0.02
+    hml_total_cash_needed = hml_needed_down + hml_points_cost + 2000  # 2k buffer
+
+    can_wholesale  = True
+    can_flip_cash  = buyer_cash >= all_in
+    can_flip_hml   = buyer_cash >= hml_total_cash_needed
+    can_brrrr_cash = buyer_cash >= all_in
+    can_brrrr_hml  = buyer_cash >= hml_total_cash_needed
+    # For small properties (<$50k), buyer buys with HML then does DSCR cash-out refi
+    can_dscr = buyer_credit_score >= 680 and (
+        buyer_cash >= cash_in_dscr
+        or (price < 50000 and (can_brrrr_cash or can_brrrr_hml))
+    )
+
+    # ── BEST STRATEGY RECOMMENDATION ─────────────────────────────────────
+    if cash_back >= all_in * 0.80 and brrrr_cf > 0 and (can_brrrr_cash or can_brrrr_hml):
+        best_strategy = "BRRRR"
+        best_reason = (
+            f"Get ${max(0, cash_back):,.0f} back at refi + ${brrrr_cf:,.0f}/mo cash flow forever. "
+            f"Recycle your capital and repeat."
+        )
+    elif sec8_cf > 200 and (can_brrrr_cash or can_brrrr_hml):
+        best_strategy = "SECTION 8 + BRRRR"
+        best_reason = (
+            f"${fmr_est:,.0f}/mo gov-guaranteed rent. Buy, rehab, place Section 8 tenant, refi."
+        )
+    elif flip_profit >= 20000 and (can_flip_cash or can_flip_hml):
+        best_strategy = "FIX & FLIP"
+        best_reason = f"${flip_profit:,.0f} profit in 3-6 months. Fast cash."
+    elif can_wholesale and mao > price:
+        best_strategy = "WHOLESALE"
+        best_reason = f"Assign contract for ${wholesale_profit:,.0f} fee. Zero money needed."
+    else:
+        best_strategy = "NEGOTIATE DOWN"
+        best_reason = f"Numbers need seller at ${mao:,.0f} or below. Current ask too high."
+
+    below_market_pct = ((arv - price) / arv * 100) if arv > 0 else 0
+    high_margin = (below_market_pct >= 60) or (cash_back >= all_in * 0.90) or (flip_profit >= 20000)
+
+    return {
+        "price":             price,
+        "arv":               arv,
+        "repairs":           round(repairs, 0),
+        "all_in":            round(all_in, 0),
+        "below_market_pct":  round(below_market_pct, 1),
+        "high_margin":       high_margin,
+        "est_monthly_tax":   est_monthly_tax,
+        "est_monthly_ins":   est_monthly_ins,
+        "market_rent":       market_rent,
+        "eff_rent":          round(eff_rent, 2),
+
+        "flip": {
+            "mao":             round(mao, 0),
+            "repairs":         round(repairs, 0),
+            "profit":          round(flip_profit, 0),
+            "roi":             round(flip_roi, 1),
+            "wholesale_fee":   round(wholesale_profit, 0),
+            "timeline":        "3–6 months",
+            "verdict":         flip_verdict,
+            "can_do":          can_flip_cash or can_flip_hml,
+        },
+
+        "brrrr": {
+            "all_in":              round(all_in, 0),
+            "refi_loan":           round(refi_loan, 0),
+            "cash_back":           round(cash_back, 0),
+            "capital_recycled":    round(capital_recycled_pct, 1),
+            "refi_payment":        round(refi_payment, 2),
+            "monthly_cf":          round(brrrr_cf, 2),
+            "verdict":             brrrr_verdict,
+            "can_do_cash":         can_brrrr_cash,
+            "can_do_hml":          can_brrrr_hml,
+            "hml_cash_needed":     round(hml_total_cash_needed, 0),
+        },
+
+        "dscr": {
+            "ratio":               round(dscr_ratio, 2),
+            "qualifies":           dscr_qualifies,
+            "down_payment":        round(cash_in_dscr, 0),
+            "monthly_payment":     round(dscr_payment, 2),
+            "monthly_cf":          round(dscr_cf, 2),
+            "coc_return":          round(coc_dscr, 1),
+            "credit_needed":       680,
+            "credit_score":        buyer_credit_score,
+            "can_do":              can_dscr,
+        },
+
+        "section8": {
+            "fmr_est":             fmr_est,
+            "market_rent":         market_rent,
+            "monthly_cf":          round(sec8_cf, 2),
+            "annual_income":       sec8_annual,
+            "coc_return":          round(sec8_coc, 1),
+            "gov_pays":            "100% of FMR",
+            "vacancy_risk":        "VERY LOW",
+            "can_do":              can_brrrr_cash or can_brrrr_hml,
+        },
+
+        "buyer": {
+            "cash":                buyer_cash,
+            "credit":              buyer_credit_score,
+            "can_wholesale":       can_wholesale,
+            "can_flip":            can_flip_cash or can_flip_hml,
+            "can_brrrr":           can_brrrr_cash or can_brrrr_hml,
+            "can_dscr":            can_dscr,
+            "hml_needed":          round(hml_total_cash_needed, 0),
+        },
+
+        "best_strategy":   best_strategy,
+        "best_reason":     best_reason,
+        "noi_annual":      round(noi_annual, 0),
+    }
+
+
 def get_section8_guide() -> dict:
     """Section 8 / Housing Choice Voucher program guide."""
     return {
@@ -235,6 +467,24 @@ def get_section8_guide() -> dict:
         "section8_apply": "https://www.hud.gov/topics/housing_choice_voucher_program_section_8",
         "tenant_finder": "https://www.gosection8.com/",
         "rental_rates":  "https://www.affordablehousingonline.com/",
+        "vash_program": {
+            "name": "VASH — Veterans Affairs Supportive Housing",
+            "what": (
+                "VASH is Section 8 specifically for homeless and at-risk veterans. "
+                "The VA pays the rent directly to you. Veterans are some of the most "
+                "responsible tenants — they lose the voucher if they violate lease terms."
+            ),
+            "how_to_list": "List your property on GoSection8.com and check the VASH box. "
+                           "Your local VA Housing Coordinator will reach out.",
+            "va_contact": "https://www.va.gov/homeless/hchv.asp",
+            "gosection8":  "https://www.gosection8.com/",
+            "vash_detail": "https://www.hud.gov/program_offices/public_indian_housing/programs/hcv/vash",
+            "pro_tip": (
+                "Properties near VA hospitals or military bases rent faster to VASH tenants. "
+                "Birmingham AL, Memphis TN, and Detroit MI all have large VA offices — "
+                "perfect overlap with your hot markets."
+            ),
+        },
         "pro_tip": (
             "Buy in Section 8 markets like Detroit, Birmingham, Memphis, Jackson — "
             "government will pay $850-$1,200/mo on a house you bought for $4k-$20k. "

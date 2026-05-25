@@ -65,6 +65,7 @@ from modules.auto_offer import (
 from modules.deal_browser import (
     GOV_SOURCES, DEAL_CATEGORIES, HOT_MARKETS,
     get_sources_by_category, analyze_deal_card,
+    all_strategies_analysis,
     get_section8_guide, get_llc_formation_guide,
 )
 from modules.brrrr import calc_brrrr, brrrr_example
@@ -136,8 +137,8 @@ def main_menu():
             "  [bold cyan][1][/bold cyan]  Browse Gov & Distressed Properties (by category)\n"
             "  [bold cyan][2][/bold cyan]  Hot Markets Guide ($4k-$20k homes)\n\n"
             "  [bold green]── ANALYZE ─────────────────────────────────────────[/bold green]\n"
-            "  [bold cyan][3][/bold cyan]  Deal Calculator (MAO / ARV / ROI / HIGH MARGIN check)\n"
-            "  [bold cyan][4][/bold cyan]  AI Deal Analyzer (full grade + strategy)\n"
+            "  [bold cyan][3][/bold cyan]  [bold]Deal Card — ALL 4 Strategies[/bold] (Flip │ BRRRR │ DSCR │ Section 8)\n"
+            "  [bold cyan][4][/bold cyan]  AI Deal Analyzer (full grade + strategy + red flags)\n"
             "  [bold cyan][5][/bold cyan]  Neighborhood & Crime Score\n"
             "  [bold cyan][6][/bold cyan]  DSCR Calculator (Rental Loan Qualifier)\n"
             "  [bold cyan][7][/bold cyan]  Property Tax & Insurance Estimates\n"
@@ -248,58 +249,182 @@ def menu_browse_deals():
     press_enter()
 
 
+def display_full_deal_card(data: dict, address: str = "", badge: str = ""):
+    """
+    Render a Tranchi.ai-style deal card with all 4 strategies pre-calculated.
+    Shows Flip, BRRRR, DSCR, and Section 8 side by side on one screen.
+    """
+    flip  = data["flip"]
+    brrrr = data["brrrr"]
+    dscr  = data["dscr"]
+    sec8  = data["section8"]
+    buyer = data["buyer"]
+
+    high_margin_badge = "  [bold white on green] ⭐ HIGH MARGIN [/bold white on green]" if data["high_margin"] else ""
+    badge_str = f"  [bold magenta]{badge}[/bold magenta]" if badge else ""
+    header = (
+        f"  [bold]{address or 'Property Analysis'}[/bold]{badge_str}{high_margin_badge}\n\n"
+        f"  Ask: [bold yellow]{currency(data['price'])}[/bold yellow]"
+        f"  │  ARV: [bold cyan]{currency(data['arv'])}[/bold cyan]"
+        f"  │  [yellow]{data['below_market_pct']}% Below Market[/yellow]"
+        f"  │  Repairs: {currency(data['repairs'])}"
+        f"  │  All-In: [bold]{currency(data['all_in'])}[/bold]"
+        f"  │  Rent Est: [green]{currency(data['market_rent'])}/mo[/green]"
+    )
+    console.print(Panel(header, border_style="bright_white", title="[bold white]DEAL CARD[/bold white]"))
+
+    # ── Strategy panels ──────────────────────────────────────────────────
+    flip_color = "green" if flip["verdict"] in ("STRONG FLIP", "GOOD FLIP") else (
+        "yellow" if flip["verdict"] == "MARGINAL" else "red"
+    )
+    flip_panel = Panel(
+        f"[bold]MAO:[/bold] [cyan]{currency(flip['mao'])}[/cyan]\n"
+        f"[bold]Repairs:[/bold] {currency(flip['repairs'])}\n"
+        f"[bold]Profit:[/bold] [bold green]{currency(flip['profit'])}[/bold green]\n"
+        f"[bold]ROI:[/bold] {flip['roi']}%\n"
+        f"[bold]Wholesale Fee:[/bold] [yellow]{currency(flip['wholesale_fee'])}[/yellow]\n"
+        f"[bold]Timeline:[/bold] {flip['timeline']}\n\n"
+        f"[bold {flip_color}]{flip['verdict']}[/bold {flip_color}]",
+        title="[bold yellow]🔨 FIX & FLIP[/bold yellow]",
+        border_style=flip_color,
+    )
+
+    cash_back = brrrr["cash_back"]
+    brrrr_color = (
+        "green"  if "PERFECT" in brrrr["verdict"] or "EXCELLENT" in brrrr["verdict"]
+        else "cyan"   if "GOOD" in brrrr["verdict"]
+        else "yellow" if "PARTIAL" in brrrr["verdict"]
+        else "red"
+    )
+    cash_back_str = (
+        f"[bold green]+{currency(cash_back)} BACK 💰[/bold green]" if cash_back > 0
+        else f"[red]{currency(cash_back)} left in[/red]"
+    )
+    cf2_color = "green" if brrrr["monthly_cf"] > 0 else "red"
+    brrrr_panel = Panel(
+        f"[bold]All-In:[/bold] {currency(brrrr['all_in'])}\n"
+        f"[bold]Refi @ 75% ARV:[/bold] {currency(brrrr['refi_loan'])}\n"
+        f"[bold]Cash Back:[/bold] {cash_back_str}\n"
+        f"[bold]Capital Recycled:[/bold] {brrrr['capital_recycled']}%\n"
+        f"[bold]Refi Pmt:[/bold] {currency(brrrr['refi_payment'])}/mo\n"
+        f"[bold]Cash Flow:[/bold] [{cf2_color}]{currency(brrrr['monthly_cf'])}/mo[/{cf2_color}]\n\n"
+        f"[bold {brrrr_color}]{brrrr['verdict']}[/bold {brrrr_color}]",
+        title="[bold cyan]🔄 BRRRR / REFI[/bold cyan]",
+        border_style=brrrr_color,
+    )
+
+    dscr_color = "green" if dscr["qualifies"] else "red"
+    dscr_status = (
+        f"[bold green]✓ QUALIFIES ({dscr['ratio']}x)[/bold green]" if dscr["qualifies"]
+        else f"[bold red]✗ {dscr['ratio']}x (need 1.25x)[/bold red]"
+    )
+    dcf_color = "green" if dscr["monthly_cf"] > 0 else "red"
+    dscr_panel = Panel(
+        f"[bold]DSCR:[/bold] {dscr_status}\n"
+        f"[bold]Credit:[/bold] Need 680 │ Yours: [green]{dscr['credit_score']}[/green] [green]✓[/green]\n"
+        f"[bold]Cash In:[/bold] {currency(dscr['down_payment'])}\n"
+        f"[bold]Mortgage:[/bold] {currency(dscr['monthly_payment'])}/mo\n"
+        f"[bold]Cash Flow:[/bold] [{dcf_color}]{currency(dscr['monthly_cf'])}/mo[/{dcf_color}]\n"
+        f"[bold]CoC Return:[/bold] {dscr['coc_return']}%\n\n"
+        f"[bold {'green' if dscr['can_do'] else 'red'}]{'✓ QUALIFIED' if dscr['can_do'] else '✗ Need more cash'}[/bold {'green' if dscr['can_do'] else 'red'}]",
+        title="[bold blue]🏦 DSCR LOAN[/bold blue]",
+        border_style=dscr_color,
+    )
+
+    s8_cf_color = "green" if sec8["monthly_cf"] > 0 else "red"
+    sec8_panel = Panel(
+        f"[bold]FMR Rent:[/bold] [bold green]{currency(sec8['fmr_est'])}/mo[/bold green]\n"
+        f"[bold]Market Rent:[/bold] {currency(sec8['market_rent'])}/mo\n"
+        f"[bold]Gov Pays:[/bold] [green]{sec8['gov_pays']}[/green]\n"
+        f"[bold]Cash Flow:[/bold] [{s8_cf_color}]{currency(sec8['monthly_cf'])}/mo[/{s8_cf_color}]\n"
+        f"[bold]Annual:[/bold] {currency(sec8['annual_income'])} guaranteed\n"
+        f"[bold]CoC Return:[/bold] {sec8['coc_return']}%\n\n"
+        f"[bold green]Vacancy Risk: {sec8['vacancy_risk']}[/bold green]",
+        title="[bold magenta]🏛️ SECTION 8[/bold magenta]",
+        border_style="magenta",
+    )
+
+    console.print(Columns([flip_panel, brrrr_panel, dscr_panel, sec8_panel], equal=True, expand=True))
+
+    # ── Buyer position + recommendation ─────────────────────────────────
+    brrrr_status = (
+        "[green]✓ YES (cash)[/green]" if buyer["can_brrrr"]
+        else f"[yellow]✓ w/ Hard Money (need ~{currency(data['brrrr']['hml_cash_needed'])})[/yellow]"
+    )
+    position_line = (
+        f"  Cash: [bold yellow]{currency(buyer['cash'])}[/bold yellow]  │  "
+        f"Credit: [bold yellow]{buyer['credit']}[/bold yellow]  │  "
+        f"Wholesale: [green]✓[/green]  │  "
+        f"BRRRR: {brrrr_status}  │  "
+        f"DSCR Loan: {'[green]✓ QUALIFIED[/green]' if buyer['can_dscr'] else '[red]✗ Below threshold[/red]'}"
+    )
+    console.print(Panel(
+        f"{position_line}\n\n"
+        f"  [bold green]★  BEST STRATEGY: {data['best_strategy']}[/bold green]\n"
+        f"  {data['best_reason']}",
+        title="[bold green]YOUR POSITION[/bold green]",
+        border_style="green",
+    ))
+
+
 def menu_hot_markets():
     section("HOT MARKETS — $4K-$20K HOMES")
-    console.print("[dim]Markets shown in Tranchi.ai where tax deed / land bank homes are cheapest.[/dim]\n")
+    console.print(
+        "[dim]Same markets Tranchi.ai shows. Each card displays all 4 exit strategies "
+        "calculated for average-priced properties in that market.[/dim]\n"
+    )
 
-    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
-    t.add_column("City")
-    t.add_column("State")
-    t.add_column("Avg Price", justify="right")
-    t.add_column("Avg Rent", justify="right")
-    t.add_column("Est. Cash Flow", justify="right")
-    t.add_column("DSCR", justify="right")
-    t.add_column("Source URL")
+    profile = load_profile()
+    credit  = profile.get("credit_score", 730)
+    cash    = profile.get("available_cash", 12000)
 
-    for m in HOT_MARKETS:
-        price = m["avg_price"]
-        rent = m["avg_rent"]
-        # Quick deal card calc
-        mortgage = price * 0.20 * (0.085 / 12)  # 20% down, ~8.5% HML or cash-free
-        tax = price * 0.016 / 12
-        insurance = 50
-        metrics = analyze_deal_card(price, price * 8, rent, mortgage, tax, insurance)
-        cf_color = "green" if metrics["cash_flow"] > 0 else "red"
-
-        t.add_row(
-            m["city"],
-            m["state"],
-            currency(price),
-            currency(rent),
-            f"[{cf_color}]{currency(metrics['cash_flow'])}/mo[/{cf_color}]",
-            f"{metrics['dscr']}x",
-            m["url"][:45],
+    for i, m in enumerate(HOT_MARKETS, 1):
+        arv_est = m["avg_price"] * 8  # typical ARV is 6-10x purchase for these markets
+        data = all_strategies_analysis(
+            price=m["avg_price"],
+            arv=arv_est,
+            market_rent=m["avg_rent"],
+            sqft=1000,
+            bedrooms=3,
+            state=m["state"],
+            condition="medium",
+            buyer_credit_score=credit,
+            buyer_cash=cash,
         )
+        display_full_deal_card(
+            data,
+            address=f"{m['city']}, {m['state']}",
+            badge="TAX DEED / LAND BANK",
+        )
+        console.print(f"  [dim]Source: {m['url']}[/dim]\n")
 
-    console.print(t)
-    console.print("\n[bold yellow]Strategy:[/bold yellow] Buy for $4k-$20k → Section 8 tenant → $800-$1,100/mo gov-guaranteed rent")
-    console.print("[dim]DSCR is insanely high because mortgage on a $5k house is under $50/month.[/dim]")
+        if i < len(HOT_MARKETS) and not Confirm.ask("See next market?", default=True):
+            break
+
+    if Confirm.ask("\nSave a deal to your pipeline?", default=False):
+        _pipeline_add()
     press_enter()
 
 
 # ── 3. Deal Calculator ────────────────────────────────────────────────────────
 
 def menu_deal_calculator():
-    section("DEAL CALCULATOR")
-    console.print("[dim]Run the numbers on any potential deal using the 70% Rule.[/dim]\n")
-
-    sub = Prompt.ask(
-        "What do you want to calculate?",
-        choices=["mao", "cashflow", "repair"],
-        default="mao",
+    section("DEAL CALCULATOR — ALL STRATEGIES")
+    console.print(
+        "[dim]Enter a property's basic numbers and see ALL 4 exit strategies calculated\n"
+        "simultaneously: Fix & Flip, BRRRR, DSCR Rental Loan, and Section 8.\n"
+        "Your cash ($12k) and credit (730) are shown on every card.[/dim]\n"
     )
 
-    if sub == "mao":
+    sub = Prompt.ask(
+        "Calculate",
+        choices=["full", "mao", "cashflow", "repair"],
+        default="full",
+    )
+
+    if sub == "full":
+        _calc_full_deal_card()
+    elif sub == "mao":
         _calc_mao()
     elif sub == "cashflow":
         _calc_cashflow()
@@ -307,13 +432,75 @@ def menu_deal_calculator():
         _calc_repair()
 
 
-def _calc_mao():
-    console.print("\n[bold]Enter deal details[/bold] (press Enter to skip optional fields)\n")
+def _calc_full_deal_card():
+    """Full Tranchi.ai-style deal card — all 4 strategies at once."""
+    console.print("\n[bold]Enter property details[/bold]\n")
 
-    arv = FloatPrompt.ask("After Repair Value (ARV) — what similar fixed-up homes sell for")
-    repairs = FloatPrompt.ask("Estimated repair cost")
-    asking = FloatPrompt.ask("Seller's asking price")
-    fee = FloatPrompt.ask("Your wholesale fee target", default=10000)
+    address = Prompt.ask("Address or description (optional)", default="")
+    price   = FloatPrompt.ask("Asking / purchase price")
+    arv     = FloatPrompt.ask("ARV — what it's worth fixed up (pull comps!)")
+    rent    = FloatPrompt.ask("Estimated monthly rent")
+    sqft    = FloatPrompt.ask("Square footage (approx)", default=1000)
+    beds    = IntPrompt.ask("Bedrooms", default=3)
+    state   = Prompt.ask("State abbreviation (e.g. MI, AL, TN)", default="MI").upper()
+    condition = Prompt.ask(
+        "Condition",
+        choices=["light", "medium", "heavy", "gut"],
+        default="medium",
+    )
+    repair_known = Confirm.ask("Do you have a specific repair estimate?", default=False)
+    repair_override = FloatPrompt.ask("Repair cost") if repair_known else None
+
+    profile = load_profile()
+    credit  = profile.get("credit_score", 730)
+    cash    = profile.get("available_cash", 12000)
+
+    with console.status("[bold green]Calculating all strategies...[/bold green]"):
+        data = all_strategies_analysis(
+            price=price,
+            arv=arv,
+            market_rent=rent,
+            sqft=sqft,
+            bedrooms=beds,
+            state=state,
+            condition=condition,
+            repair_override=repair_override,
+            buyer_credit_score=credit,
+            buyer_cash=cash,
+        )
+
+    display_full_deal_card(data, address=address, badge=condition.upper())
+
+    # Offer to add to pipeline
+    if Confirm.ask("\nAdd this deal to your pipeline?", default=False):
+        stage = Prompt.ask(
+            "Stage",
+            choices=["Lead", "Analyzing", "Offer Sent", "Under Contract", "Marketing", "Closed", "Dead"],
+            default="Lead",
+        )
+        notes = Prompt.ask("Notes", default=f"Best strategy: {data['best_strategy']}")
+        add_deal(
+            address=address or "Unknown address",
+            price=price,
+            arv=arv,
+            repairs=data["repairs"],
+            rent=rent,
+            strategy=data["best_strategy"],
+            stage=stage,
+            notes=notes,
+        )
+        console.print("[green]✓ Added to pipeline.[/green]")
+
+    press_enter()
+
+
+def _calc_mao():
+    console.print("\n[bold]MAO — Maximum Allowable Offer[/bold]\n")
+
+    arv      = FloatPrompt.ask("ARV (what it's worth fully fixed up)")
+    repairs  = FloatPrompt.ask("Estimated repair cost")
+    asking   = FloatPrompt.ask("Seller's asking price")
+    fee      = FloatPrompt.ask("Your wholesale fee target", default=10000)
     discount = FloatPrompt.ask("ARV discount % (70 = standard, 65 = stricter)", default=70) / 100
 
     inputs = DealInputs(
@@ -329,46 +516,40 @@ def _calc_mao():
 
 def _display_deal_result(result, asking_price: float):
     console.print()
-    grade_c = grade_color(result.grade)
+    grade_c   = grade_color(result.grade)
+    grade_txt = f"[bold {grade_c}]GRADE: {result.grade}[/bold {grade_c}]"
+    deal_txt  = "[bold green]✓ IT'S A DEAL[/bold green]" if result.is_deal else "[bold red]✗ NOT A DEAL AT ASKING PRICE[/bold red]"
 
-    # Main panel
-    grade_text = f"[bold {grade_c}]GRADE: {result.grade}[/bold {grade_c}]"
-    deal_text = "[bold green]✓ IT'S A DEAL[/bold green]" if result.is_deal else "[bold red]✗ NOT A DEAL AT ASKING PRICE[/bold red]"
+    console.print(Panel(f"{grade_txt}  {deal_txt}", border_style=grade_c))
 
-    console.print(Panel(
-        f"{grade_text}  {deal_text}",
-        border_style=grade_c,
-    ))
-
-    # Numbers table
     t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
     t.add_column("Metric", style="bold")
     t.add_column("Amount", justify="right")
     t.add_column("Notes")
 
-    t.add_row("ARV (Fixed-up value)", currency(result.arv), "Pull real comps!")
-    t.add_row("Repair Estimate", currency(result.repair_cost), "Get contractor bids")
-    t.add_row("Seller Asking", currency(asking_price), "")
+    t.add_row("ARV (Fixed-up value)",        currency(result.arv),               "Pull real comps!")
+    t.add_row("Repair Estimate",             currency(result.repair_cost),        "Get contractor bids")
+    t.add_row("Seller Asking",               currency(asking_price),              "")
     t.add_row("─" * 20, "─" * 10, "")
-    t.add_row("[bold]Max Allowable Offer (MAO)[/bold]", f"[bold green]{currency(result.mao)}[/bold green]", "Most you can pay seller")
-    t.add_row("Suggested Opening Offer", currency(result.suggested_offer), "~12% below MAO (room to negotiate)")
+    t.add_row("[bold]Max Allowable Offer (MAO)[/bold]",
+              f"[bold green]{currency(result.mao)}[/bold green]",                 "Most you can pay")
+    t.add_row("Suggested Opening Offer",     currency(result.suggested_offer),    "~12% below MAO")
     t.add_row("─" * 20, "─" * 10, "")
-    t.add_row("Max End Buyer Price", currency(result.max_end_buyer_price), "MAO + your fee")
-    t.add_row("[bold yellow]Your Wholesale Fee[/bold yellow]", f"[bold yellow]{currency(result.profit_at_mao)}[/bold yellow]", "If you pay MAO")
-    t.add_row("Your Cash Needed (EMD)", currency(result.cash_in_deal), "Earnest money only")
-    t.add_row("Equity Spread", currency(result.equity_spread), "ARV - (price + repairs)")
+    t.add_row("Max End Buyer Price",         currency(result.max_end_buyer_price),"MAO + your fee")
+    t.add_row("[bold yellow]Your Wholesale Fee[/bold yellow]",
+              f"[bold yellow]{currency(result.profit_at_mao)}[/bold yellow]",     "At MAO")
+    t.add_row("Your Cash Needed (EMD)",      currency(result.cash_in_deal),       "Earnest money only")
+    t.add_row("Equity Spread",               currency(result.equity_spread),      "ARV − (price + repairs)")
 
     console.print(t)
 
     if not result.is_deal:
         gap = asking_price - result.mao
-        console.print(f"\n[bold red]Seller needs to come down {currency(gap)} to make this work.[/bold red]")
-        console.print(f"[yellow]Negotiate from your opening offer of {currency(result.suggested_offer)}.[/yellow]")
+        console.print(f"\n[bold red]Seller needs to drop {currency(gap)} to make this work.[/bold red]")
+        console.print(f"[yellow]Open at {currency(result.suggested_offer)} and negotiate up.[/yellow]")
 
-    if result.notes:
-        console.print("\n[bold]Notes:[/bold]")
-        for note in result.notes:
-            console.print(f"  • {note}")
+    for note in result.notes:
+        console.print(f"  • {note}")
 
     press_enter()
 
@@ -710,16 +891,67 @@ def _show_wholesale_checklist():
 # ── 8. Cash Buyers ───────────────────────────────────────────────────────────
 
 def menu_cash_buyers():
-    section("FIND CASH BUYERS")
+    section("FIND CASH BUYERS, DEVELOPERS & MOTIVATED SELLERS")
     _check_ai_key()
 
-    market = Prompt.ask("Your target market (city, state, or metro area)", default="Atlanta, GA")
-    prop_type = Prompt.ask("Property type you're wholesaling", default="single family")
+    console.print(
+        "  [1] Find Cash Buyers in my market\n"
+        "  [2] Find Local Developers & Flippers\n"
+        "  [3] Find Motivated Sellers\n"
+        "  [4] Show Facebook Investor Groups\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
 
-    console.print(f"\n[dim]Building cash buyer strategy for {market}...[/dim]")
-    strategy = find_cash_buyers_strategy(market=market, property_type=prop_type)
+    if sub == "0":
+        return
 
-    console.print(Panel(Markdown(strategy), title="[bold cyan]Cash Buyer Strategy[/bold cyan]", border_style="cyan"))
+    market    = Prompt.ask("Target market (city and state)", default="Detroit, MI")
+    prop_type = Prompt.ask("Property type", default="single family")
+
+    if sub == "1":
+        console.print(f"\n[dim]Building cash buyer strategy for {market}...[/dim]")
+        strategy = find_cash_buyers_strategy(market=market, property_type=prop_type)
+        console.print(Panel(Markdown(strategy), title="[bold cyan]Cash Buyer Strategy[/bold cyan]", border_style="cyan"))
+
+    elif sub == "2":
+        console.print(f"\n[dim]Finding developers and active flippers in {market}...[/dim]")
+        result = ask_advisor(
+            f"I'm a real estate wholesaler in {market} with {prop_type} properties. "
+            f"Give me a complete step-by-step guide to find: "
+            f"(1) Local developers actively buying and building in this market, "
+            f"(2) Active fix-and-flip investors who buy volume, "
+            f"(3) Landlords who own 5+ properties and keep buying, "
+            f"(4) Property management companies that might have investor clients. "
+            f"Include specific ways to find them: county records, LinkedIn, PropStream, "
+            f"local REIA groups, BiggerPockets, and in-person strategies. "
+            f"Give me exact search terms and outreach scripts."
+        )
+        console.print(Panel(Markdown(result), title=f"[bold cyan]Developers & Flippers — {market}[/bold cyan]", border_style="cyan"))
+
+    elif sub == "3":
+        console.print(f"\n[dim]Finding motivated sellers in {market}...[/dim]")
+        result = ask_advisor(
+            f"I'm wholesaling {prop_type} properties in {market}. "
+            f"Give me the complete playbook for finding motivated sellers: "
+            f"(1) Free public record sources — tax delinquent lists, probate, divorce, pre-foreclosure, "
+            f"(2) Driving for dollars — what to look for and how to track, "
+            f"(3) Direct mail — best lists, message templates, response rates, "
+            f"(4) Online methods — Facebook Marketplace, Craigslist, Google ads strategy, "
+            f"(5) Bandit signs — best placement, what to write, local rules, "
+            f"(6) Cold calling — best lists to call, opener scripts. "
+            f"Be specific about free vs paid options and expected response rates."
+        )
+        console.print(Panel(Markdown(result), title=f"[bold cyan]Motivated Sellers — {market}[/bold cyan]", border_style="cyan"))
+
+    elif sub == "4":
+        groups = get_facebook_buyer_groups()
+        console.print(Panel(
+            Markdown(groups),
+            title="[bold cyan]Facebook Investor Groups[/bold cyan]",
+            border_style="cyan",
+        ))
+
     press_enter()
 
 
@@ -1058,6 +1290,7 @@ def menu_brrrr():
 def menu_section8():
     section("SECTION 8 / GOVERNMENT TENANT GUIDE")
     guide = get_section8_guide()
+    vash  = guide["vash_program"]
 
     console.print(Panel(guide["what_it_is"], title="What is Section 8?", border_style="blue"))
     console.print(f"\n[bold yellow]Pro Tip:[/bold yellow] {guide['pro_tip']}\n")
@@ -1071,11 +1304,41 @@ def menu_section8():
         console.print(f"  {step}")
 
     console.print("\n[bold]Key Links:[/bold]")
-    console.print(f"  Find your local HUD/PHA: {guide['find_your_pha']}")
-    console.print(f"  HUD Fair Market Rents:   {guide['fmr_lookup']}")
-    console.print(f"  Section 8 Info:          {guide['section8_apply']}")
-    console.print(f"  Find Section 8 Tenants:  {guide['tenant_finder']}")
-    console.print(f"  Affordable Housing:      {guide['rental_rates']}")
+    console.print(f"  Find your local HUD/PHA:  {guide['find_your_pha']}")
+    console.print(f"  HUD Fair Market Rents:    {guide['fmr_lookup']}")
+    console.print(f"  Section 8 Info:           {guide['section8_apply']}")
+    console.print(f"  Find Section 8 Tenants:   {guide['tenant_finder']}")
+    console.print(f"  Affordable Housing:       {guide['rental_rates']}")
+
+    # VASH — Veterans Affairs Supportive Housing
+    console.print()
+    console.print(Panel(
+        f"[bold]{vash['what']}[/bold]\n\n"
+        f"[bold cyan]How to Get VASH Tenants:[/bold cyan]\n"
+        f"  {vash['how_to_list']}\n\n"
+        f"[bold yellow]Pro Tip:[/bold yellow] {vash['pro_tip']}\n\n"
+        f"[bold]VASH Links:[/bold]\n"
+        f"  VA Housing Coordinator: {vash['va_contact']}\n"
+        f"  List your property:     {vash['gosection8']}\n"
+        f"  VASH Program details:   {vash['vash_detail']}",
+        title="[bold yellow]🎖️  VASH — Veterans Affairs Supportive Housing (Section 8 for Vets)[/bold yellow]",
+        border_style="yellow",
+    ))
+
+    # AI tenant finder tip
+    if os.getenv("ANTHROPIC_API_KEY"):
+        if Confirm.ask("\nGet AI help finding the right tenant strategy for your property?", default=False):
+            address = Prompt.ask("Property address or market")
+            beds    = IntPrompt.ask("Bedrooms", default=3)
+            rent    = FloatPrompt.ask("Estimated rent")
+            console.print("\n[dim]Analyzing tenant strategy...[/dim]")
+            result = ask_advisor(
+                f"I have a {beds}-bedroom rental in {address} renting for ${rent}/mo. "
+                f"Walk me through the best tenant strategy: should I prioritize Section 8, "
+                f"VASH veterans voucher, or standard market rental? How do I find tenants "
+                f"for each? Give me specific steps and the best websites/apps."
+            )
+            console.print(Panel(Markdown(result), title="[bold green]AI Tenant Strategy[/bold green]", border_style="green"))
 
     press_enter()
 
@@ -1122,27 +1385,72 @@ def menu_investor_profile():
         val = Prompt.ask(label, default=str(default_override if default_override is not None else current))
         return val
 
-    profile["name"] = ask("Your full name", "name")
+    profile["name"]    = ask("Your full name", "name")
     profile["company"] = ask("Company / LLC name", "company")
-    profile["email"] = ask("Your email", "email")
-    profile["phone"] = ask("Your phone", "phone")
-    profile["purchasing_entity"] = ask("Purchasing entity (e.g. 'Smith Holdings LLC')", "purchasing_entity", profile.get("company", ""))
+    profile["email"]   = ask("Your email", "email")
+    profile["phone"]   = ask("Your phone", "phone")
+    profile["purchasing_entity"] = ask(
+        "Purchasing entity (e.g. 'Smith Holdings LLC')", "purchasing_entity",
+        profile.get("company", ""),
+    )
     profile["preferred_financing"] = Prompt.ask(
         "Preferred financing",
         choices=["DSCR Loan", "Seller Finance", "Hard Money", "Cash", "$5K Down", "Conventional"],
         default=profile.get("preferred_financing", "DSCR Loan"),
     )
-    profile["portfolio_size"] = int(FloatPrompt.ask("Number of properties in your portfolio", default=profile.get("portfolio_size", 0)))
-    profile["years_experience"] = int(FloatPrompt.ask("Years of investing experience", default=profile.get("years_experience", 1)))
-    profile["emd_amount"] = int(FloatPrompt.ask("Earnest Money Deposit amount", default=profile.get("emd_amount", 1000)))
-    profile["closing_days"] = int(FloatPrompt.ask("Preferred closing days", default=profile.get("closing_days", 30)))
-    profile["seller_credit_pct"] = int(FloatPrompt.ask("Seller credit % to request (3 is standard)", default=profile.get("seller_credit_pct", 3)))
-    profile["bio_line"] = ask("One-liner bio for offer emails (optional)", "bio_line")
+
+    console.print("\n[bold cyan]── Your Investor Position (used on every deal card) ──[/bold cyan]")
+    profile["credit_score"]    = int(FloatPrompt.ask(
+        "Your credit score", default=profile.get("credit_score", 730)
+    ))
+    profile["available_cash"]  = int(FloatPrompt.ask(
+        "Cash available to invest ($)", default=profile.get("available_cash", 12000)
+    ))
+    profile["exit_strategy"]   = Prompt.ask(
+        "Primary exit strategy",
+        choices=["Wholesale", "Flip", "BRRRR", "Buy & Hold", "Section 8"],
+        default=profile.get("exit_strategy", "BRRRR"),
+    )
+    profile["target_markets"]  = ask(
+        "Target markets (e.g. Detroit MI, Birmingham AL)", "target_markets",
+        profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN"),
+    )
+
+    console.print("\n[bold cyan]── Offer Settings ──[/bold cyan]")
+    profile["portfolio_size"]   = int(FloatPrompt.ask("Properties in portfolio", default=profile.get("portfolio_size", 0)))
+    profile["years_experience"] = int(FloatPrompt.ask("Years of experience", default=profile.get("years_experience", 1)))
+    profile["emd_amount"]       = int(FloatPrompt.ask("Earnest Money Deposit ($)", default=profile.get("emd_amount", 1000)))
+    profile["closing_days"]     = int(FloatPrompt.ask("Preferred closing days", default=profile.get("closing_days", 30)))
+    profile["seller_credit_pct"]= int(FloatPrompt.ask("Seller credit % to request", default=profile.get("seller_credit_pct", 3)))
+    profile["bio_line"]         = ask("One-liner bio for offer emails", "bio_line")
 
     save_profile(profile)
-    console.print(f"\n[bold green]✓ Profile saved![/bold green]")
-    console.print(f"  Name:     {profile['name']} | {profile['company']}")
-    console.print(f"  Finance:  {profile['preferred_financing']} | EMD ${profile['emd_amount']:,} | Close in {profile['closing_days']} days")
+
+    credit = profile["credit_score"]
+    cash   = profile["available_cash"]
+    credit_color = "green" if credit >= 700 else ("yellow" if credit >= 650 else "red")
+    cash_color   = "green" if cash >= 10000 else ("yellow" if cash >= 5000 else "red")
+
+    # Show what deals they can currently do
+    console.print(Panel(
+        f"  Name:    [bold]{profile['name']}[/bold] | {profile['company']}\n"
+        f"  Credit:  [{credit_color}]{credit}[/{credit_color}]  │  "
+        f"Cash:    [{cash_color}]{currency(cash)}[/{cash_color}]  │  "
+        f"Strategy: [bold cyan]{profile['exit_strategy']}[/bold cyan]\n\n"
+        f"  [bold]What you can do RIGHT NOW:[/bold]\n"
+        f"  Wholesale (no money needed):  [bold green]✓ ALWAYS[/bold green]\n"
+        f"  DSCR Loan (credit ≥ 680):     "
+        f"{'[bold green]✓ QUALIFIED[/bold green]' if credit >= 680 else '[bold red]✗ Work on credit first[/bold red]'}\n"
+        f"  Hard Money (10% + points):    "
+        f"{'[bold green]✓ YES[/bold green]' if cash >= 5000 else '[bold yellow]Need $5k+ for HML down[/bold yellow]'}\n"
+        f"  Detroit BRRRR (buy cash):     "
+        f"{'[bold green]✓ YES[/bold green]' if cash >= 8000 else '[bold yellow]Need $8k for buy + some rehab[/bold yellow]'}\n"
+        f"  Full Cash BRRRR:              "
+        f"{'[bold green]✓ YES for Detroit/Jackson[/bold green]' if cash >= 25000 else f'[bold yellow]Need ~$25k all-in (currently {currency(cash)})[/bold yellow]'}\n"
+        f"\n  Targets: {profile['target_markets']}",
+        title="[bold green]✓ Profile Saved[/bold green]",
+        border_style="green",
+    ))
     press_enter()
 
 

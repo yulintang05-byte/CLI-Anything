@@ -23,6 +23,12 @@ DEFAULTS = {
     "closing_days": 30,
     "seller_credit_pct": 3,
     "bio_line": "",
+    # Investor financial position — drives personalized strategy recommendations
+    "credit_score": 730,
+    "available_cash": 12000,
+    "monthly_income": 0,       # for conventional loan qualification
+    "target_markets": "Detroit MI, Birmingham AL, Memphis TN",
+    "exit_strategy": "BRRRR",  # Wholesale / Flip / BRRRR / Buy & Hold
 }
 
 
