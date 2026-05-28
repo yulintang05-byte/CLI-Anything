@@ -15,6 +15,15 @@
         "name": "cli-anything contributors"
       },
       "category": "development"
+    },
+    {
+      "name": "social-trends",
+      "source": "./social-trends/agent-harness",
+      "description": "Scrape YouTube + TikTok for viral trends, hashtags, and music. Optimize social accounts and build converting theme pages.",
+      "author": {
+        "name": "cli-anything contributors"
+      },
+      "category": "social-media"
     }
   ]
 }
