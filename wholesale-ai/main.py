@@ -68,7 +68,34 @@ from modules.deal_browser import (
     all_strategies_analysis,
     get_section8_guide, get_llc_formation_guide,
 )
-from modules.brrrr import calc_brrrr, brrrr_example
+from modules.brrrr        import calc_brrrr, brrrr_example
+from modules.lender_directory import (
+    HARD_MONEY_LENDERS, DSCR_LENDERS,
+    get_hml_for_deal, get_dscr_for_deal, get_lender_summary,
+)
+from modules.tenant_screener  import (
+    SCREENING_QUESTIONS, SCREENING_SERVICES, SECTION8_SCREENING,
+    VASH_SCREENING, score_tenant,
+)
+from modules.luxury_wholesale import (
+    LUXURY_MARKETS, LUXURY_DEAL_SOURCES, LUXURY_DEVELOPER_BUYERS,
+    LUXURY_DEAL_ANALYSIS, calc_luxury_deal,
+)
+from modules.web_scraper      import (
+    scrape_craigslist_fsbo, get_dlba_listings,
+    get_tax_deed_listings, get_hud_listings_url,
+    CRAIGSLIST_CITIES,
+)
+from agents.runner import AgentRunner
+
+# Global agent runner (started once, shared across menus)
+_runner: Optional[AgentRunner] = None
+
+def get_runner() -> AgentRunner:
+    global _runner
+    if _runner is None:
+        _runner = AgentRunner()
+    return _runner
 
 
 console = Console()
@@ -128,44 +155,66 @@ def main_menu():
     while True:
         show_banner()
         profile = load_profile()
-        profile_status = f"[green]{profile['name']} | {profile['company']}[/green]" if is_profile_complete(profile) else "[yellow]⚠ Profile not set — do [17] first![/yellow]"
+        runner  = get_runner()
+        agent_status = "[bold green]● RUNNING[/bold green]" if runner.is_running() else "[dim]○ Idle[/dim]"
+        profile_status = (
+            f"[green]{profile['name']} | {profile['company']}[/green]"
+            if is_profile_complete(profile)
+            else "[yellow]⚠ Set profile first — option 28![/yellow]"
+        )
+        stats = runner.dashboard()["stats"]
 
         console.print(Panel(
-            "\n"
-            f"  Profile: {profile_status}\n\n"
-            "  [bold green]── FIND DEALS ──────────────────────────────────────[/bold green]\n"
-            "  [bold cyan][1][/bold cyan]  Browse Gov & Distressed Properties (by category)\n"
-            "  [bold cyan][2][/bold cyan]  Hot Markets Guide ($4k-$20k homes)\n\n"
-            "  [bold green]── ANALYZE ─────────────────────────────────────────[/bold green]\n"
-            "  [bold cyan][3][/bold cyan]  [bold]Deal Card — ALL 4 Strategies[/bold] (Flip │ BRRRR │ DSCR │ Section 8)\n"
-            "  [bold cyan][4][/bold cyan]  AI Deal Analyzer (full grade + strategy + red flags)\n"
+            f"\n  Profile: {profile_status}   Agents: {agent_status}"
+            f"   Earned: [bold green]${stats['total_earned']:,.0f}[/bold green]"
+            f"   Close Rate: [cyan]{stats['close_rate']}%[/cyan]\n\n"
+
+            "  [bold green]── FIND DEALS ──────────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][1][/bold cyan]  Browse Gov & Distressed Properties\n"
+            "  [bold cyan][2][/bold cyan]  Hot Markets Guide ($4k-$20k)\n"
+            "  [bold cyan][23][/bold cyan] [bold]LIVE Lead Finder[/bold] — Scrape & Score Properties Now\n"
+            "  [bold cyan][24][/bold cyan] Luxury Wholesale + Developer Buyers ($500k+)\n\n"
+
+            "  [bold green]── ANALYZE ─────────────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][3][/bold cyan]  [bold]Deal Card — ALL 4 Strategies[/bold] (Flip │ BRRRR │ DSCR │ Sec8)\n"
+            "  [bold cyan][4][/bold cyan]  AI Deal Analyzer (full grade + red flags)\n"
             "  [bold cyan][5][/bold cyan]  Neighborhood & Crime Score\n"
-            "  [bold cyan][6][/bold cyan]  DSCR Calculator (Rental Loan Qualifier)\n"
+            "  [bold cyan][6][/bold cyan]  DSCR Calculator\n"
             "  [bold cyan][7][/bold cyan]  Property Tax & Insurance Estimates\n"
-            "  [bold cyan][8][/bold cyan]  BRRRR Calculator (Recycle Your Capital)\n\n"
-            "  [bold green]── MAKE OFFERS ──────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][8][/bold cyan]  BRRRR Calculator\n"
+            "  [bold cyan][25][/bold cyan] Lender Directory (Hard Money + DSCR Loans)\n\n"
+
+            "  [bold green]── MAKE OFFERS ─────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][9][/bold cyan]  [bold]AUTO OFFER[/bold] — Generate & Send Offer Emails\n"
-            "  [bold cyan][10][/bold cyan] Generate Negotiation Script\n"
-            "  [bold cyan][11][/bold cyan] Generate Offer Letter / LOI\n\n"
-            "  [bold green]── CLOSE & SCALE ────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][10][/bold cyan] AI Negotiation Script + Counter Strategy\n"
+            "  [bold cyan][11][/bold cyan] Generate Contract (Assignment │ Sub-To │ Seller Finance │ More)\n\n"
+
+            "  [bold green]── AI AGENTS (Proactive — Goal: $10k-$30k/mo) ──────────────[/bold green]\n"
+            "  [bold cyan][26][/bold cyan] [bold]Run All Agents[/bold] — Find → Analyze → Offer pipeline\n"
+            "  [bold cyan][27][/bold cyan] Agent Dashboard — Leads queue, activity, learned patterns\n\n"
+
+            "  [bold green]── CLOSE & SCALE ────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][12][/bold cyan] Deal Pipeline / CRM\n"
-            "  [bold cyan][13][/bold cyan] Creative Financing (Subject-To / Seller Finance)\n"
-            "  [bold cyan][14][/bold cyan] Section 8 / Gov Tenant Guide\n"
-            "  [bold cyan][15][/bold cyan] Find Cash Buyers + Facebook Groups\n"
-            "  [bold cyan][16][/bold cyan] LLC Formation Guide\n\n"
-            "  [bold green]── OTHER ────────────────────────────────────────────[/bold green]\n"
-            "  [bold cyan][17][/bold cyan] My Investor Profile (feeds Auto Offer)\n"
-            "  [bold cyan][18][/bold cyan] Wholesale Strategy Guide\n"
-            "  [bold cyan][19][/bold cyan] Repair Cost Guide\n"
-            "  [bold cyan][20][/bold cyan] Ask the AI Advisor Anything\n"
-            "  [bold cyan][21][/bold cyan] HUD Fair Market Rents Lookup\n"
-            "  [bold cyan][22][/bold cyan] Setup & API Keys\n"
+            "  [bold cyan][13][/bold cyan] Creative Financing\n"
+            "  [bold cyan][14][/bold cyan] Section 8 / VASH Tenant Guide\n"
+            "  [bold cyan][15][/bold cyan] Find Cash Buyers, Developers & Motivated Sellers\n"
+            "  [bold cyan][16][/bold cyan] LLC Formation Guide\n"
+            "  [bold cyan][29][/bold cyan] Pre-Screen Tenants\n\n"
+
+            "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
+            "  [bold cyan][17][/bold cyan] Wholesale Strategy Guide\n"
+            "  [bold cyan][18][/bold cyan] Repair Cost Guide\n"
+            "  [bold cyan][19][/bold cyan] Ask the AI Advisor Anything\n"
+            "  [bold cyan][20][/bold cyan] HUD Fair Market Rents\n"
+            "  [bold cyan][21][/bold cyan] Setup & API Keys\n"
             "  [bold cyan][0][/bold cyan]  Exit\n",
-            title="[bold green]WHOLESALE AI — MAIN MENU[/bold green]",
+            title="[bold green]WHOLESALE AI — COMMAND CENTER[/bold green]",
             border_style="green",
         ))
 
-        choice = Prompt.ask("[bold]Select[/bold]", choices=[str(i) for i in range(23)])
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29"]
+        choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
             console.print("\n[bold green]Go get that bag.[/bold green]\n")
@@ -203,17 +252,29 @@ def main_menu():
         elif choice == "16":
             menu_llc_guide()
         elif choice == "17":
-            menu_investor_profile()
-        elif choice == "18":
             menu_strategy_guide()
-        elif choice == "19":
+        elif choice == "18":
             menu_repair_guide()
-        elif choice == "20":
+        elif choice == "19":
             menu_ask_advisor()
-        elif choice == "21":
+        elif choice == "20":
             menu_hud_fmr()
-        elif choice == "22":
+        elif choice == "21":
             menu_setup()
+        elif choice == "23":
+            menu_live_leads()
+        elif choice == "24":
+            menu_luxury()
+        elif choice == "25":
+            menu_lenders()
+        elif choice == "26":
+            menu_run_agents()
+        elif choice == "27":
+            menu_agent_dashboard()
+        elif choice == "28":
+            menu_investor_profile()
+        elif choice == "29":
+            menu_tenant_screener()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -1956,6 +2017,631 @@ def menu_tax_insurance():
 
     console.print(f"\n[bold]Look Up Actual Tax Records:[/bold]")
     console.print(f"  • {tax['lookup_url']}")
+
+    press_enter()
+
+
+# ── 23. Live Lead Finder ─────────────────────────────────────────────────────
+
+def menu_live_leads():
+    section("LIVE LEAD FINDER — SCRAPE & SCORE NOW")
+    console.print("[dim]Scans Craigslist FSBO, Detroit Land Bank, tax deed sites, and HUD HomeStore right now.[/dim]\n")
+
+    profile = load_profile()
+    target_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
+
+    markets_input = Prompt.ask("Markets to scan (comma-separated)", default=target_markets)
+    markets       = [m.strip() for m in markets_input.split(",")]
+    max_price     = IntPrompt.ask("Max price filter", default=80000)
+
+    runner = get_runner()
+
+    console.print("\n[bold green]Agents scanning sources...[/bold green]\n")
+    result = runner.run_full_pipeline(markets=markets, max_price=max_price, console=console)
+
+    lead_result = result.get("lead_result", {})
+    console.print(Panel(
+        f"  Found:           [bold cyan]{lead_result.get('new_leads', 0)}[/bold cyan] leads\n"
+        f"  High Margin:     [bold green]{lead_result.get('high_margin', 0)}[/bold green] deals\n"
+        f"  Queued ≥7 score: [cyan]{lead_result.get('queued_for_analysis', 0)}[/cyan]",
+        title="[bold green]SCAN COMPLETE[/bold green]",
+        border_style="green",
+    ))
+
+    ready    = result.get("ready_for_review", [])
+    analyzed = result.get("analyzed_leads", [])
+
+    if ready:
+        console.print(f"\n[bold green]⭐ {len(ready)} HIGH MARGIN DEALS — Ready for Review:[/bold green]\n")
+        for lead in ready:
+            display_full_deal_card(
+                lead["full_analysis"],
+                address=lead.get("title", "")[:60],
+                badge=lead.get("source", ""),
+            )
+            console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
+            if not Confirm.ask("See next deal?", default=True):
+                break
+    elif analyzed:
+        console.print(f"\n[cyan]{len(analyzed)} analyzed leads:[/cyan]\n")
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Score", justify="right")
+        t.add_column("Title", max_width=45)
+        t.add_column("Price", justify="right")
+        t.add_column("Strategy")
+        t.add_column("AI Reasoning", max_width=38)
+        for lead in analyzed[:10]:
+            score = lead.get("score", 0)
+            sc    = "green" if score >= 8 else "yellow" if score >= 6 else "red"
+            t.add_row(
+                f"[{sc}]{score:.1f}[/{sc}]",
+                lead.get("title", "")[:45],
+                currency(lead.get("price", 0)),
+                lead.get("best_strategy", "?"),
+                lead.get("ai_reasoning", "")[:38],
+            )
+        console.print(t)
+    else:
+        top_leads = lead_result.get("top_leads", [])
+        if top_leads:
+            console.print("\n[bold]Top Scored Leads (no full analysis yet):[/bold]")
+            for lead in top_leads[:5]:
+                score = lead.get("score", 0)
+                sc    = "green" if score >= 8 else "yellow"
+                console.print(f"  [{sc}]{score:.1f}[/{sc}]  {lead.get('title','')[:55]}")
+                if lead.get("url"):
+                    console.print(f"       [dim]{lead['url']}[/dim]")
+        else:
+            console.print("[yellow]No leads scored ≥6 this scan. Try different markets or higher max price.[/yellow]")
+
+    if Confirm.ask("\nSave a deal to your pipeline?", default=False):
+        _pipeline_add()
+    press_enter()
+
+
+# ── 24. Luxury Wholesale ──────────────────────────────────────────────────────
+
+def menu_luxury():
+    section("LUXURY WHOLESALE + DEVELOPER BUYERS ($500k+)")
+    console.print("[dim]Wholesale high-end properties to developers. 65% ARV rule. Fees $25k–$100k+.[/dim]\n")
+
+    console.print(
+        "  [1] Browse Luxury Markets & Sources\n"
+        "  [2] Analyze a Luxury Deal\n"
+        "  [3] Find Developer Buyers\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        console.print("\n[bold cyan]── LUXURY MARKETS ──[/bold cyan]\n")
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("City", style="bold")
+        t.add_column("State")
+        t.add_column("Avg Price", justify="right")
+        t.add_column("Avg ARV", justify="right")
+        t.add_column("Developer Focus")
+        for m in LUXURY_MARKETS:
+            t.add_row(m["city"], m["state"], currency(m["avg_price"]), currency(m["avg_arv"]), m.get("developer_focus", ""))
+        console.print(t)
+
+        console.print("\n[bold cyan]── DEAL SOURCES ──[/bold cyan]\n")
+        for src_name, src in LUXURY_DEAL_SOURCES.items():
+            console.print(f"  [bold yellow]{src_name}[/bold yellow]")
+            console.print(f"    {src['description']}")
+            console.print(f"    How to find: {src['how_to_find']}")
+            console.print(f"    Typical discount: [green]{src['typical_discount']}[/green]\n")
+
+    elif sub == "2":
+        console.print("\n[bold]Luxury Deal Analysis[/bold]\n")
+        address = Prompt.ask("Address or description", default="")
+        price   = FloatPrompt.ask("Purchase price")
+        arv     = FloatPrompt.ask("ARV (after repair value)")
+        sqft    = FloatPrompt.ask("Square footage", default=3000)
+        repairs = FloatPrompt.ask("Repair cost (0 to use sqft estimate)", default=0)
+
+        result  = calc_luxury_deal(price=price, arv=arv, sqft=float(sqft), repairs=float(repairs))
+
+        grade_c = {"A": "bold green", "B": "bold cyan", "C": "bold yellow", "F": "bold red"}.get(result["grade"], "bold white")
+        is_deal_str = "[bold green]✓ IT'S A DEAL[/bold green]" if result["is_deal"] else "[bold red]✗ Not a deal at this price[/bold red]"
+
+        console.print(Panel(
+            f"  [{grade_c}]GRADE: {result['grade']}[/{grade_c}]  {is_deal_str}\n\n"
+            f"  Price:          {currency(price)}\n"
+            f"  ARV:            {currency(arv)}\n"
+            f"  Discount:       [yellow]{result['discount_pct']}% below ARV[/yellow]\n"
+            f"  Repairs Est:    {currency(result['repairs'])}\n"
+            f"  65% Rule MAO:   [bold cyan]{currency(result['mao'])}[/bold cyan]\n\n"
+            f"  [bold green]Wholesale Fee:  {currency(result['wholesale_fee'])}[/bold green]\n"
+            f"  Profit:         {currency(result['profit'])}\n"
+            f"  ROI:            {result['roi']}%\n\n"
+            f"  Price/sqft ask: ${result['ppsf_ask']:,.0f}   ARV/sqft: ${result['ppsf_arv']:,.0f}",
+            title=f"[bold]Luxury Deal — {address or 'Property'}[/bold]",
+            border_style="green" if result["is_deal"] else "red",
+        ))
+
+        if Confirm.ask("\nAdd to pipeline?", default=False):
+            add_deal(address=address or "Luxury Deal", asking_price=price, arv=arv,
+                     repairs=result["repairs"], source="luxury wholesale", stage="Lead")
+            console.print("[green]✓ Added to pipeline[/green]")
+
+    elif sub == "3":
+        console.print("\n[bold cyan]── LUXURY DEVELOPER BUYERS ──[/bold cyan]\n")
+        for section_title, items in LUXURY_DEVELOPER_BUYERS.items():
+            if isinstance(items, list):
+                console.print(f"[bold yellow]{section_title}:[/bold yellow]")
+                for item in items:
+                    console.print(f"  • {item}")
+                console.print()
+
+        if os.getenv("ANTHROPIC_API_KEY"):
+            if Confirm.ask("\nGet AI help finding developers in a specific market?", default=False):
+                market = Prompt.ask("Market (e.g. Miami, FL)")
+                console.print("\n[dim]Finding developers...[/dim]")
+                ai_result = ask_advisor(
+                    f"I'm a luxury real estate wholesaler in {market} targeting $500k-$5M properties. "
+                    f"Give me: (1) Specific developer companies active in {market}, "
+                    f"(2) How to find them via county records, LinkedIn, CoStar, LoopNet, "
+                    f"(3) Exact outreach script to get on their buyer list, "
+                    f"(4) What deal criteria developers look for. Be specific and actionable."
+                )
+                console.print(Panel(Markdown(ai_result), title=f"[bold cyan]Developers in {market}[/bold cyan]", border_style="cyan"))
+
+    press_enter()
+
+
+# ── 25. Lender Directory ──────────────────────────────────────────────────────
+
+def menu_lenders():
+    section("LENDER DIRECTORY — HARD MONEY + DSCR LOANS")
+    console.print("[dim]Hard money for flips/BRRRRs. DSCR for rentals — no W2 or income verification needed.[/dim]\n")
+
+    console.print(
+        "  [1] Hard Money Lenders (flips & BRRRRs)\n"
+        "  [2] DSCR Lenders (rental — no income check)\n"
+        "  [3] Match lenders to my specific deal\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Lender", style="bold")
+        t.add_column("Rates", justify="right")
+        t.add_column("LTV")
+        t.add_column("Min Credit")
+        t.add_column("Specialty")
+        t.add_column("URL")
+        for lender in HARD_MONEY_LENDERS:
+            t.add_row(
+                lender["name"],
+                lender["rates"],
+                lender["ltv"][:25],
+                str(lender["min_credit"]),
+                lender["specialty"],
+                lender["url"],
+            )
+        console.print(t)
+        console.print("\n[bold yellow]Tips:[/bold yellow]")
+        console.print("  • Always get 3 quotes — rates vary 1-3% between lenders")
+        console.print("  • Points (origination) are negotiable on repeat business")
+        console.print("  • Build a relationship — after 3 deals they may skip appraisals")
+        console.print("  • Ask about 'extension fees' upfront if you need more flip time")
+
+    elif sub == "2":
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Lender", style="bold")
+        t.add_column("Rates", justify="right")
+        t.add_column("Min DSCR")
+        t.add_column("Min Credit")
+        t.add_column("LTV")
+        t.add_column("URL")
+        for lender in DSCR_LENDERS:
+            t.add_row(
+                lender["name"],
+                lender["rates"],
+                str(lender["min_dscr"]),
+                str(lender["min_credit"]),
+                lender["ltv"],
+                lender["url"],
+            )
+        console.print(t)
+        console.print("\n[bold yellow]DSCR Tips:[/bold yellow]")
+        console.print("  • No W2 or tax returns needed — property income qualifies you")
+        console.print("  • DSCR ≥ 1.25 required: rent / (P&I + tax + insurance) ≥ 1.25")
+        console.print("  • Down payment 20-25% of purchase price")
+        console.print("  • Rates 1-2% above conventional — worth it for portfolio growth")
+
+    elif sub == "3":
+        console.print("\n[bold]Match Lenders to Your Deal[/bold]\n")
+        loan_type = Prompt.ask("Loan type", choices=["hard_money", "dscr"], default="hard_money")
+        price     = FloatPrompt.ask("Purchase price")
+        credit    = IntPrompt.ask("Your credit score", default=730)
+        state     = Prompt.ask("State abbreviation", default="MI").upper()
+
+        if loan_type == "hard_money":
+            arv     = FloatPrompt.ask("ARV", default=price * 2)
+            matches = get_hml_for_deal(price=price, arv=float(arv), credit_score=credit, state=state)
+        else:
+            dscr_ratio  = FloatPrompt.ask("Your DSCR ratio (rent / PITI)", default=1.3)
+            loan_amount = price * 0.75
+            matches     = get_dscr_for_deal(dscr_ratio=float(dscr_ratio), credit_score=credit, loan_amount=loan_amount)
+
+        if matches:
+            console.print(f"\n[bold green]✓ {len(matches)} lenders match your deal:[/bold green]\n")
+            for lender in matches:
+                console.print(f"  [bold cyan]{lender['name']}[/bold cyan]")
+                console.print(f"    Rates: {lender['rates']}  │  {lender.get('ltv', '')}  │  Min credit: {lender['min_credit']}")
+                if lender.get("note"):
+                    console.print(f"    Note: [dim]{lender['note']}[/dim]")
+                console.print(f"    {lender['url']}\n")
+        else:
+            console.print("[yellow]No exact matches — check your credit score or deal size.[/yellow]")
+
+    press_enter()
+
+
+# ── 26. Run All Agents ────────────────────────────────────────────────────────
+
+def menu_run_agents():
+    section("AI AGENTS — FULL PIPELINE")
+    console.print(
+        "[dim]The agents work the full pipeline:\n"
+        "  LeadAgent → scrape + score leads\n"
+        "  NegotiationAgent → generate scripts + counter strategies\n"
+        "  ClosingAgent → auto-select contract + generate docs\n"
+        "  Runner → orchestrate everything, self-improve from outcomes[/dim]\n"
+    )
+
+    console.print(
+        "  [1] Run full pipeline now (find → analyze → flag)\n"
+        "  [2] Start background agents (runs every N hours)\n"
+        "  [3] Stop background agents\n"
+        "  [4] Generate AI negotiation script\n"
+        "  [5] Generate contract for a deal\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
+    if sub == "0":
+        return
+
+    runner  = get_runner()
+    profile = load_profile()
+    target_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
+
+    if sub == "1":
+        markets_input = Prompt.ask("Markets (comma-separated)", default=target_markets)
+        markets   = [m.strip() for m in markets_input.split(",")]
+        max_price = IntPrompt.ask("Max price filter", default=80000)
+
+        console.print("\n[bold green]Running full pipeline...[/bold green]\n")
+        result    = runner.run_full_pipeline(markets=markets, max_price=max_price, console=console)
+
+        ready  = result.get("ready_for_review", [])
+        stats  = result.get("stats", {})
+        lr     = result.get("lead_result", {})
+
+        console.print(Panel(
+            f"  Leads Found:   [cyan]{lr.get('new_leads', 0)}[/cyan]\n"
+            f"  High Margin:   [bold green]{len(ready)}[/bold green] deals ready for review\n"
+            f"  Analyzed:      [cyan]{len(result.get('analyzed_leads', []))}[/cyan]\n\n"
+            f"  Total Earned:  [bold green]${stats.get('total_earned', 0):,.0f}[/bold green]\n"
+            f"  Close Rate:    [cyan]{stats.get('close_rate', 0)}%[/cyan]",
+            title="[bold green]PIPELINE COMPLETE[/bold green]",
+            border_style="green",
+        ))
+
+        for lead in ready[:3]:
+            if lead.get("full_analysis"):
+                display_full_deal_card(lead["full_analysis"],
+                                       address=lead.get("title","")[:60],
+                                       badge=lead.get("source",""))
+                console.print(f"  [dim]{lead.get('url','')}[/dim]\n")
+                if not Confirm.ask("See next?", default=True):
+                    break
+
+    elif sub == "2":
+        if runner.is_running():
+            console.print("[yellow]Agents already running in background.[/yellow]")
+        else:
+            hours = IntPrompt.ask("Run every N hours", default=24)
+            markets_input = Prompt.ask("Markets", default=target_markets)
+            markets = [m.strip() for m in markets_input.split(",")]
+            msg = runner.start_background(interval_hours=hours, markets=markets)
+            console.print(f"\n[bold green]✓ {msg}[/bold green]")
+            console.print("[dim]Check Agent Dashboard (option 27) to see results.[/dim]")
+
+    elif sub == "3":
+        if runner.is_running():
+            msg = runner.stop_background()
+            console.print(f"\n[yellow]{msg}[/yellow]")
+        else:
+            console.print("[dim]No background agents running.[/dim]")
+
+    elif sub == "4":
+        _check_ai_key()
+        console.print("\n[bold]AI Negotiation Script[/bold]\n")
+        address     = Prompt.ask("Property address")
+        seller_name = Prompt.ask("Seller name", default="Seller")
+        asking      = FloatPrompt.ask("Their asking price")
+        mao         = FloatPrompt.ask("Your MAO (Max Allowable Offer)")
+        situation   = Prompt.ask("Seller situation (foreclosure, divorce, inherited, etc.)", default="")
+
+        with console.status("[bold green]Generating script...[/bold green]"):
+            neg = runner.run_negotiation(
+                address=address, seller_name=seller_name,
+                asking_price=asking, mao=mao, seller_situation=situation,
+            )
+
+        console.print(Panel(neg["opening_script"],
+                            title="[bold cyan]OPENING SCRIPT[/bold cyan]", border_style="cyan"))
+        console.print(Panel(
+            f"  Open at:   [bold yellow]{currency(neg['your_target'])}[/bold yellow]  (12% below MAO)\n"
+            f"  MAO:       [bold cyan]{currency(neg['mao'])}[/bold cyan]\n\n"
+            f"  [bold]Walk Assessment:[/bold]  {neg['walk_assessment']['decision']}\n"
+            f"  {neg['walk_assessment']['full_analysis'][:400]}",
+            title="[bold green]DEAL ASSESSMENT[/bold green]", border_style="green",
+        ))
+
+    elif sub == "5":
+        console.print("\n[bold]Generate Contract[/bold]\n")
+        address     = Prompt.ask("Property address")
+        seller_name = Prompt.ask("Seller name")
+        price       = FloatPrompt.ask("Purchase price")
+        strategy    = Prompt.ask(
+            "Strategy",
+            choices=["Wholesale", "Flip", "BRRRR", "Buy & Hold", "Subject-To", "Seller Finance"],
+            default="Wholesale",
+        )
+        w_fee = 0
+        if strategy == "Wholesale":
+            w_fee = FloatPrompt.ask("Assignment / wholesale fee", default=10000)
+
+        deal = {"address": address, "seller_name": seller_name, "price": price,
+                "best_strategy": strategy, "wholesale_fee": w_fee}
+
+        with console.status("[bold green]Generating contract...[/bold green]"):
+            close_result = runner.prepare_close(deal)
+
+        contract = close_result["contract"]
+        body     = contract.get("body") or contract.get("contract") or str(contract)
+
+        console.print(Panel(body,
+                            title=f"[bold yellow]{close_result['contract_type'].upper()} CONTRACT[/bold yellow]",
+                            border_style="yellow"))
+
+        if close_result.get("warnings"):
+            console.print("\n[bold red]Warnings:[/bold red]")
+            for w in close_result["warnings"]:
+                console.print(f"  ⚠ {w}")
+
+        console.print("\n[bold green]✓ Contract ready to sign![/bold green]")
+        console.print("[yellow]⚠  Have a real estate attorney review before signing.[/yellow]")
+
+        if Confirm.ask("\nSave to file?", default=True):
+            safe  = address.replace(" ", "_").replace(",", "")[:40]
+            fname = f"contract_{safe}.txt"
+            Path(fname).write_text(body)
+            console.print(f"[green]✓ Saved to {fname}[/green]")
+
+    press_enter()
+
+
+# ── 27. Agent Dashboard ───────────────────────────────────────────────────────
+
+def menu_agent_dashboard():
+    section("AGENT DASHBOARD")
+
+    runner = get_runner()
+    dash   = runner.dashboard()
+    stats  = dash["stats"]
+
+    status_str = "[bold green]● RUNNING[/bold green]" if dash["running"] else "[dim]○ Idle[/dim]"
+    console.print(Panel(
+        f"  Status:          {status_str}\n\n"
+        f"  Total Earned:    [bold green]${stats.get('total_earned', 0):,.0f}[/bold green]\n"
+        f"  Deals Won:       [cyan]{stats.get('won', 0)}[/cyan]   "
+        f"Lost: [red]{stats.get('lost', 0)}[/red]\n"
+        f"  Close Rate:      [bold]{stats.get('close_rate', 0)}%[/bold]\n"
+        f"  Avg Assignment Fee: [green]${stats.get('avg_fee', 0):,.0f}[/green]\n"
+        f"  Avg Days to Close:  [dim]{stats.get('avg_days_to_close', 0)}[/dim]",
+        title="[bold green]AGENT PERFORMANCE[/bold green]",
+        border_style="green",
+    ))
+
+    new_leads = dash.get("new_leads", [])
+    if new_leads:
+        console.print(f"\n[bold cyan]── NEW LEADS (top {len(new_leads)}) ──[/bold cyan]")
+        t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+        t.add_column("Score", justify="right")
+        t.add_column("Title", max_width=48)
+        t.add_column("Price", justify="right")
+        t.add_column("Strategy")
+        t.add_column("Source")
+        for lead in new_leads:
+            score = lead.get("score", 0)
+            sc    = "green" if score >= 8 else "yellow" if score >= 6 else "red"
+            t.add_row(
+                f"[{sc}]{score:.1f}[/{sc}]",
+                lead.get("title", "")[:48],
+                currency(lead.get("price", 0)),
+                lead.get("best_strategy", "?"),
+                lead.get("source", "")[:15],
+            )
+        console.print(t)
+
+    high_margin = dash.get("high_margin", [])
+    if high_margin:
+        console.print(f"\n[bold green]── ⭐ HIGH MARGIN DEALS ──[/bold green]")
+        for lead in high_margin:
+            console.print(f"  [bold green]⭐[/bold green]  {lead.get('title','')[:55]}")
+            console.print(f"     ${lead.get('price',0):,}  │  {lead.get('best_strategy','?')}  │  Score {lead.get('score',0):.1f}")
+            if lead.get("url"):
+                console.print(f"     [dim]{lead['url']}[/dim]")
+
+    recent = dash.get("recent", [])
+    if recent:
+        console.print(f"\n[bold dim]── RECENT ACTIVITY ──[/bold dim]")
+        for act in recent[:8]:
+            ts = act.get("ts", "")[:16]
+            console.print(
+                f"  [dim]{ts}[/dim]  [cyan]{act.get('agent','')}[/cyan]  "
+                f"{act.get('action','')}  [dim]{act.get('detail','')[:40]}[/dim]"
+            )
+
+    patterns = dash.get("learned_patterns", {})
+    if any(v for v in patterns.values() if v):
+        console.print(f"\n[bold yellow]── AGENT LEARNED PATTERNS ──[/bold yellow]")
+        for agent_name, p in patterns.items():
+            insights = (p or {}).get("insights", [])
+            if insights:
+                console.print(f"\n  [bold]{agent_name.upper()}:[/bold]")
+                for ins in insights[:3]:
+                    console.print(f"    • {ins}")
+
+    if Confirm.ask("\nRecord a deal outcome (train the agents)?", default=False):
+        _record_deal_outcome()
+
+    press_enter()
+
+
+def _record_deal_outcome():
+    from agents.memory import record_deal_outcome
+    console.print("\n[bold]Record Deal Outcome[/bold]\n")
+    address      = Prompt.ask("Property address")
+    outcome      = Prompt.ask("Outcome", choices=["won", "lost"], default="won")
+    price        = FloatPrompt.ask("Contract purchase price")
+    fee          = FloatPrompt.ask("Assignment fee earned (0 if lost)", default=0)
+    days         = IntPrompt.ask("Days from first contact to outcome", default=30)
+    strategy     = Prompt.ask("Strategy", choices=["Wholesale","Flip","BRRRR","Buy & Hold"], default="Wholesale")
+    what_worked  = Prompt.ask("What worked?", default="") if outcome == "won" else ""
+    what_failed  = Prompt.ask("What killed this deal?", default="") if outcome == "lost" else ""
+
+    record_deal_outcome(
+        address=address, outcome=outcome, purchase_price=price,
+        assignment_fee=fee, days_to_close=days, strategy=strategy,
+        what_worked=what_worked, what_failed=what_failed,
+    )
+    console.print(f"\n[green]✓ Outcome recorded. Agents will learn from this![/green]")
+    if outcome == "won":
+        console.print(f"[bold green]  🎉 ${fee:,.0f} earned![/bold green]")
+
+
+# ── 29. Tenant Pre-Screener ───────────────────────────────────────────────────
+
+def menu_tenant_screener():
+    section("TENANT PRE-SCREENER")
+    console.print("[dim]Pre-screen tenants before paying for a full background check.[/dim]\n")
+
+    console.print(
+        "  [1] Pre-screen a tenant (Q&A scoring)\n"
+        "  [2] Section 8 screening checklist\n"
+        "  [3] VASH (Veterans) screening guide\n"
+        "  [4] Full-service screening providers\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        console.print("\n[bold]Tenant Pre-Screen[/bold]")
+        rent = FloatPrompt.ask("Monthly rent amount")
+
+        console.print("\n[dim]Answer based on what the applicant told you.[/dim]\n")
+        answers: dict = {}
+
+        for q in SCREENING_QUESTIONS:
+            qid   = q["id"]
+            label = q["q"]
+            qtype = q["type"]
+            opts  = q.get("options", [])
+
+            if qtype == "number":
+                val = FloatPrompt.ask(f"  {label}", default=0)
+                answers[qid] = val
+            elif qtype == "yesno":
+                answers[qid] = Confirm.ask(f"  {label}", default=False)
+            elif qtype == "choice" and opts:
+                console.print(f"\n  [bold]{label}[/bold]")
+                for i, opt in enumerate(opts):
+                    console.print(f"    [{i}] {opt}")
+                idx = Prompt.ask("  Select", choices=[str(i) for i in range(len(opts))], default="0")
+                answers[qid] = opts[int(idx)]
+            else:
+                answers[qid] = Prompt.ask(f"  {label}", default="")
+
+        result = score_tenant(answers, rent)
+        score  = result["score"]
+        sc     = "green" if score >= 70 else "yellow" if score >= 50 else "red"
+
+        positives_str = ""
+        if result.get("positives"):
+            positives_str = "[bold green]Positives:[/bold green]\n" + "\n".join(f"  ✓ {p}" for p in result["positives"]) + "\n\n"
+
+        red_flags_str = ""
+        if result.get("red_flags"):
+            red_flags_str = "[bold red]Red Flags:[/bold red]\n" + "\n".join(f"  ⚠ {r}" for r in result["red_flags"])
+
+        console.print(Panel(
+            f"  [bold {sc}]Score: {score}/100[/bold {sc}]\n"
+            f"  Recommendation: [bold]{result['recommendation']}[/bold]\n\n"
+            + positives_str + red_flags_str,
+            title="[bold]SCREENING RESULT[/bold]",
+            border_style=sc,
+        ))
+
+        console.print("\n[bold]Next Steps:[/bold]")
+        if score >= 70:
+            console.print("  ✓ Run full background check (option 4 for providers)")
+            console.print("  ✓ Verify income directly with employer")
+            console.print("  ✓ Call previous landlord references")
+        elif score >= 50:
+            console.print("  → Ask more questions before proceeding")
+            console.print("  → Consider requiring larger security deposit")
+        else:
+            console.print("  ✗ Decline — too many red flags")
+            console.print("  → Document reason (follow Fair Housing laws)")
+
+    elif sub == "2":
+        console.print("\n[bold cyan]SECTION 8 TENANT SCREENING[/bold cyan]\n")
+        console.print("[bold]What CHANGES with Section 8:[/bold]")
+        for item in SECTION8_SCREENING.get("what_changes", []):
+            console.print(f"  ✓ {item}")
+        console.print("\n[bold]What You STILL Check:[/bold]")
+        for item in SECTION8_SCREENING.get("what_you_still_check", []):
+            console.print(f"  • {item}")
+        console.print("\n[bold]The Process:[/bold]")
+        for step in SECTION8_SCREENING.get("process", []):
+            console.print(f"  {step}")
+        console.print(f"\n  GoSection8.com:  {SECTION8_SCREENING.get('gosection8','')}")
+        console.print(f"  Find tenants:    {SECTION8_SCREENING.get('find_tenants','')}")
+
+    elif sub == "3":
+        console.print("\n[bold yellow]VASH — VETERANS AFFAIRS SUPPORTIVE HOUSING[/bold yellow]\n")
+        console.print(f"  {VASH_SCREENING.get('what_is_vash','')}\n")
+        console.print(f"  [bold]VA Case Manager:[/bold] {VASH_SCREENING.get('va_case_manager','')}\n")
+        find_list = VASH_SCREENING.get("find_vash_tenants", [])
+        if find_list:
+            console.print("[bold]How to find VASH tenants:[/bold]")
+            for item in find_list:
+                console.print(f"  • {item}")
+
+    elif sub == "4":
+        console.print("\n[bold cyan]SCREENING SERVICES[/bold cyan]\n")
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Service", style="bold")
+        t.add_column("Cost")
+        t.add_column("What's Included")
+        t.add_column("URL")
+        for svc_name, svc in SCREENING_SERVICES.items():
+            t.add_row(svc_name, svc.get("cost",""), svc.get("checks",""), svc.get("url",""))
+        console.print(t)
+        console.print("\n[bold yellow]Tip:[/bold yellow] Charge application fee to tenant — legal and standard practice.")
 
     press_enter()
 
