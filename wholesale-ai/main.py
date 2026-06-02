@@ -87,6 +87,7 @@ from modules.web_scraper      import (
     CRAIGSLIST_CITIES,
 )
 from agents.runner import AgentRunner
+from agents.memory import get_stats as agent_stats
 
 # Global agent runner (started once, shared across menus)
 _runner: Optional[AgentRunner] = None
@@ -162,7 +163,9 @@ def main_menu():
             if is_profile_complete(profile)
             else "[yellow]⚠ Set profile first — option 28![/yellow]"
         )
-        stats = runner.dashboard()["stats"]
+        # Header only needs earned + close rate — use the cheap stats accessor,
+        # not the full dashboard() (which does ~6 JSON reads) on every redraw.
+        stats = agent_stats()
 
         console.print(Panel(
             f"\n  Profile: {profile_status}   Agents: {agent_status}"
@@ -1118,7 +1121,7 @@ def menu_auto_offer():
 
     if not is_profile_complete(profile):
         console.print(Panel(
-            "[yellow]Set up your Investor Profile first (menu option 17).[/yellow]\n"
+            "[yellow]Set up your Investor Profile first (menu option 28).[/yellow]\n"
             "Your profile feeds into every offer email automatically.",
             border_style="yellow",
         ))
@@ -2279,8 +2282,23 @@ def menu_lenders():
                 if lender.get("note"):
                     console.print(f"    Note: [dim]{lender['note']}[/dim]")
                 console.print(f"    {lender['url']}\n")
+        elif loan_type == "dscr":
+            loan_amt = price * 0.75
+            console.print(Panel(
+                f"[yellow]No DSCR lender matches a ${loan_amt:,.0f} loan.[/yellow]\n\n"
+                f"Most DSCR lenders have a [bold]$75k-$100k minimum loan[/bold] — that's why cheap "
+                f"Detroit/Birmingham/Memphis properties don't qualify for a direct DSCR purchase.\n\n"
+                f"[bold green]The play for cheap markets:[/bold green]\n"
+                f"  1. Buy the property [bold]CASH[/bold] (or hard money) — see option 25 → Hard Money\n"
+                f"  2. Rehab and rent it\n"
+                f"  3. Refinance with a [bold]portfolio lender[/bold] that bundles 3-5 homes into one\n"
+                f"     loan above the $75k minimum (try Trident, Lima One, CoreVest)\n\n"
+                f"This is the BRRRR strategy — run the numbers on the Deal Card (option 3).",
+                title="[bold]DSCR Loan Minimum[/bold]",
+                border_style="yellow",
+            ))
         else:
-            console.print("[yellow]No exact matches — check your credit score or deal size.[/yellow]")
+            console.print("[yellow]No exact matches — try lowering your credit threshold or check deal size.[/yellow]")
 
     press_enter()
 
@@ -2402,13 +2420,14 @@ def menu_run_agents():
             w_fee = FloatPrompt.ask("Assignment / wholesale fee", default=10000)
 
         deal = {"address": address, "seller_name": seller_name, "price": price,
-                "best_strategy": strategy, "wholesale_fee": w_fee}
+                "strategy": strategy, "best_strategy": strategy, "wholesale_fee": w_fee}
 
+        # Contract is a free template — skip the paid AI offer packet here.
         with console.status("[bold green]Generating contract...[/bold green]"):
-            close_result = runner.prepare_close(deal)
+            close_result = runner.prepare_close(deal, include_offer_packet=False)
 
         contract = close_result["contract"]
-        body     = contract.get("body") or contract.get("contract") or str(contract)
+        body     = contract.get("content", str(contract))
 
         console.print(Panel(body,
                             title=f"[bold yellow]{close_result['contract_type'].upper()} CONTRACT[/bold yellow]",
@@ -2421,12 +2440,9 @@ def menu_run_agents():
 
         console.print("\n[bold green]✓ Contract ready to sign![/bold green]")
         console.print("[yellow]⚠  Have a real estate attorney review before signing.[/yellow]")
-
-        if Confirm.ask("\nSave to file?", default=True):
-            safe  = address.replace(" ", "_").replace(",", "")[:40]
-            fname = f"contract_{safe}.txt"
-            Path(fname).write_text(body)
-            console.print(f"[green]✓ Saved to {fname}[/green]")
+        # generate_contract() already saved a copy; surface that path.
+        if contract.get("filename"):
+            console.print(f"[dim]Auto-saved to {contract['filename']}[/dim]")
 
     press_enter()
 
@@ -2486,7 +2502,7 @@ def menu_agent_dashboard():
     recent = dash.get("recent", [])
     if recent:
         console.print(f"\n[bold dim]── RECENT ACTIVITY ──[/bold dim]")
-        for act in recent[:8]:
+        for act in reversed(recent[-8:]):
             ts = act.get("ts", "")[:16]
             console.print(
                 f"  [dim]{ts}[/dim]  [cyan]{act.get('agent','')}[/cyan]  "
@@ -2521,11 +2537,16 @@ def _record_deal_outcome():
     what_worked  = Prompt.ask("What worked?", default="") if outcome == "won" else ""
     what_failed  = Prompt.ask("What killed this deal?", default="") if outcome == "lost" else ""
 
-    record_deal_outcome(
-        address=address, outcome=outcome, purchase_price=price,
-        assignment_fee=fee, days_to_close=days, strategy=strategy,
-        what_worked=what_worked, what_failed=what_failed,
-    )
+    record_deal_outcome({
+        "address":        address,
+        "outcome":        outcome,
+        "price":          price,
+        "fee_earned":     fee,
+        "days_to_close":  days,
+        "strategy":       strategy,
+        "what_worked":    what_worked,
+        "what_failed":    what_failed,
+    })
     console.print(f"\n[green]✓ Outcome recorded. Agents will learn from this![/green]")
     if outcome == "won":
         console.print(f"[bold green]  🎉 ${fee:,.0f} earned![/bold green]")

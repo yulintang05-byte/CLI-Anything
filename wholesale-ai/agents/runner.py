@@ -20,7 +20,7 @@ from agents.memory import (
 from agents.lead_agent        import LeadAgent
 from agents.negotiation_agent import NegotiationAgent
 from agents.closing_agent     import ClosingAgent
-from modules.deal_browser     import all_strategies_analysis, HOT_MARKETS
+from modules.deal_browser     import all_strategies_analysis
 from modules.user_profile     import load_profile
 
 
@@ -84,18 +84,19 @@ class AgentRunner:
             if price <= 0:
                 continue
             try:
-                city  = lead.get("city", "Detroit")
-                state = lead.get("state", "MI")
-                hot   = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
-                arv   = hot["avg_price"] * 8 if hot else price * 6
-                rent  = hot["avg_rent"] if hot else 950
-
-                data = all_strategies_analysis(
-                    price=price, arv=arv, market_rent=rent,
-                    state=state, condition="medium",
-                    buyer_credit_score=self.profile.get("credit_score", 730),
-                    buyer_cash=self.profile.get("available_cash", 12000),
-                )
+                # LeadAgent._enrich_lead already ran all_strategies_analysis on
+                # priced leads. Reuse it so we don't double-compute with a
+                # divergent ARV formula (the two used to disagree, drifting the
+                # high_margin flag). Only compute here if the lead wasn't enriched.
+                data = lead.get("analysis")
+                if not data:
+                    data = all_strategies_analysis(
+                        price=price, arv=lead.get("arv_est") or price * 6,
+                        market_rent=lead.get("rent_est") or 950,
+                        state=lead.get("state", "MI"), condition="medium",
+                        buyer_credit_score=self.profile.get("credit_score", 730),
+                        buyer_cash=self.profile.get("available_cash", 12000),
+                    )
                 lead["full_analysis"] = data
                 lead["status"]        = "analyzed"
                 analyzed.append(lead)
@@ -209,10 +210,15 @@ class AgentRunner:
         self,
         deal: dict,
         contract_type: str = None,
+        include_offer_packet: bool = True,
     ) -> dict:
         """
-        Auto-select contract, generate it, generate offer packet.
+        Auto-select contract, generate it, and (optionally) an AI offer packet.
         Returns everything ready for human signature.
+
+        The contract itself is a free template. The offer packet is a live
+        Claude call, so pass include_offer_packet=False when the caller only
+        needs the contract (saves an Opus call / API spend).
         """
         if not contract_type:
             contract_type = self.close_agent.select_contract_type(deal)
@@ -229,7 +235,9 @@ class AgentRunner:
             inspection_days=14,
         )
 
-        offer_packet = self.close_agent.generate_offer_packet(deal, self.profile)
+        offer_packet = None
+        if include_offer_packet:
+            offer_packet = self.close_agent.generate_offer_packet(deal, self.profile)
 
         return {
             "contract_type":  contract_type,

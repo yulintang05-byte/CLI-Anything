@@ -97,6 +97,11 @@ def score_tenant(answers: dict, rent_amount: float) -> dict:
     red_flags = []
     positives = []
 
+    # Guard against a 0 rent (no default on the prompt) so the income-ratio
+    # f-strings below never divide by zero.
+    if rent_amount <= 0:
+        rent_amount = 1
+
     # Income check: standard is 3x monthly rent
     income = answers.get("income", 0)
     if income >= rent_amount * 3:

@@ -101,9 +101,10 @@ class ClosingAgent:
         """
         Generate a complete, fill-in-ready contract.
         Returns dict with: content (full text), filename, type, warnings.
-        """
-        self._require_client()
 
+        Contracts are pure templates — no Claude call, so this works with no
+        API key. Only generate_offer_packet() requires the client.
+        """
         generators = {
             "assignment":     self._gen_assignment,
             "purchase_sale":  self._gen_purchase_sale,
@@ -435,7 +436,7 @@ End Buyer:           _________________________ Date: __________
             import json
             prompt = (
                 f"From {len(won)} successful closings, what patterns emerge?\n"
-                f"Deals: {str([(d.get('contract_type'), d.get('days_to_close'), d.get('what_worked')) for d in won[:10]])}\n\n"
+                f"Deals: {str([(d.get('strategy') or d.get('contract_type'), d.get('days_to_close'), d.get('what_worked')) for d in won[:10]])}\n\n"
                 f"Respond with JSON: {{fastest_close_strategy, avg_contract_accept_days, best_emd_amount, insights: []}}"
             )
             resp = self.client.messages.create(

@@ -103,3 +103,7 @@
 assets/gen_typing_gif.py
 !README_CN.md
 !opencode-commands/
+
+# Wholesale AI generated preview artifacts
+wholesale-ai/preview.svg
+wholesale-ai/preview.png

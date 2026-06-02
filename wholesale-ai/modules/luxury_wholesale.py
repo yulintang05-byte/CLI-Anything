@@ -120,12 +120,26 @@ LUXURY_DEAL_ANALYSIS = {
 def calc_luxury_deal(price: float, arv: float, sqft: float, repairs: float = 0) -> dict:
     """Quick luxury deal analysis — tighter margins, higher fees."""
     mao = (arv * 0.65) - repairs
-    wholesale_fee = max(25000, (mao - price) * 0.5)  # Take half the spread
+    wholesale_fee = max(25000, (mao - price) * 0.5) if mao > price else 0  # Take half the spread
     profit = mao - price
     roi = (profit / price * 100) if price > 0 else 0
     ppsf_ask = price / sqft if sqft > 0 else 0
     ppsf_arv = arv / sqft if sqft > 0 else 0
     discount = ((arv - price) / arv * 100) if arv > 0 else 0
+
+    # A deal must clear the 65% rule (price at or under MAO). Grade reflects
+    # how much room is under MAO — kept consistent with is_deal so we never
+    # show "Grade A" on something that isn't actually a deal.
+    is_deal = price <= mao
+    margin_pct = ((mao - price) / mao * 100) if mao > 0 else -100
+    if not is_deal:
+        grade = "F"
+    elif margin_pct >= 12 and discount >= 30:
+        grade = "A"
+    elif margin_pct >= 6:
+        grade = "B"
+    else:
+        grade = "C"
 
     return {
         "price":          price,
@@ -136,8 +150,9 @@ def calc_luxury_deal(price: float, arv: float, sqft: float, repairs: float = 0) 
         "wholesale_fee":  round(wholesale_fee, 0),
         "roi":            round(roi, 1),
         "discount_pct":   round(discount, 1),
+        "margin_pct":     round(margin_pct, 1),
         "ppsf_ask":       round(ppsf_ask, 0),
         "ppsf_arv":       round(ppsf_arv, 0),
-        "is_deal":        price <= mao and discount >= 15,
-        "grade":          "A" if discount >= 30 else ("B" if discount >= 20 else ("C" if discount >= 15 else "F")),
+        "is_deal":        is_deal,
+        "grade":          grade,
     }

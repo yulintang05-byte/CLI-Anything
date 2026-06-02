@@ -95,11 +95,12 @@ def get_deal_outcomes() -> list:
 
 def get_stats() -> dict:
     deals  = get_deal_outcomes()
-    leads  = _read(LEADS_FILE, [])
+    leads  = _read(LEADS_FILE, [])  # read once; derive all lead counts below
     won    = [d for d in deals if d.get("outcome") == "won"]
     total  = len(deals)
     earned = sum(d.get("fee_earned", 0) for d in won)
     avg_days = sum(d.get("days_to_close", 30) for d in won) / max(len(won), 1)
+    active = len([l for l in leads if l.get("status") in ("new", "analyzing")])
     return {
         "total_deals":        total,
         "won":                len(won),
@@ -108,7 +109,7 @@ def get_stats() -> dict:
         "total_earned":       earned,
         "avg_fee":            round(earned / max(len(won), 1), 0),
         "avg_days_to_close":  round(avg_days, 0),
-        "active_leads":       count_leads("new") + count_leads("analyzing"),
+        "active_leads":       active,
         "pipeline_leads":     len(leads),
     }
 
@@ -116,9 +117,17 @@ def get_stats() -> dict:
 # ── Learned Patterns ─────────────────────────────────────────────────────────
 
 def load_patterns(agent_name: str) -> dict:
-    """Load this agent's learned patterns."""
-    learned = _read(LEARNED_FILE, {})
-    return learned.get(agent_name, _default_patterns(agent_name))
+    """
+    Load this agent's learned patterns, merged onto the defaults so a saved
+    dict that's missing a key (older file, partial learn() update, or a newly
+    added default) never KeyErrors at the call site.
+    """
+    learned  = _read(LEARNED_FILE, {})
+    patterns = _default_patterns(agent_name)
+    saved    = learned.get(agent_name)
+    if isinstance(saved, dict):
+        patterns.update(saved)
+    return patterns
 
 
 def save_patterns(agent_name: str, patterns: dict):

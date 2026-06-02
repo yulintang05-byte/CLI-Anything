@@ -220,7 +220,9 @@ class LeadAgent:
             )
             text = resp.content[0].text
             for i, lead in enumerate(leads, 1):
-                m = __import__("re").search(rf"Lead {i}:\s*([\d.]+)/10[^\n]*—[^\n]*(.+)", text)
+                # Lazy match up to the dash, then capture the rest of the line as
+                # reasoning. A greedy [^\n]* before (.+) would leave only 1 char.
+                m = __import__("re").search(rf"Lead {i}:\s*([\d.]+)/10[^\n]*?[—-]\s*([^\n]+)", text)
                 if m:
                     lead["ai_score"]     = float(m.group(1))
                     lead["ai_reasoning"] = m.group(2).strip()
