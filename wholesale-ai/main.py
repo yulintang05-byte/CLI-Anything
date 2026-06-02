@@ -2456,6 +2456,80 @@ def menu_agent_dashboard():
     dash   = runner.dashboard()
     stats  = dash["stats"]
 
+    # ── Agent Roster ─────────────────────────────────────────────────────────
+    AGENT_ROSTER = [
+        {
+            "name":       "LeadAgent — The Hunter",
+            "model":      "Haiku 4.5 (triage) + Opus 4 (learn)",
+            "role":       "Proactively scans Craigslist FSBO, Detroit DLBA, Tax Deed, HUD daily",
+            "skills":     [
+                "Scores every lead 1–10 with distress-signal analysis",
+                "Flags HIGH MARGIN deals (price well below ARV)",
+                "Runs all-4-strategy deal card on priced leads",
+                "Updates scoring patterns from won/lost outcomes",
+            ],
+            "proactive":  "Runs every N hours in background — no input needed",
+            "learns":     "After every 5 wins: updates best markets, distress signals, min score threshold",
+        },
+        {
+            "name":       "NegotiationAgent — The Deal Closer",
+            "model":      "Opus 4",
+            "role":       "Writes all seller-facing communication — never lets emotion drive the number",
+            "skills":     [
+                "Opening negotiation scripts tailored to seller situation",
+                "Counter-offer responses that hold MAO",
+                "Objection handling (title issues, repairs, timeline pressure)",
+                "Walk-away assessment — knows when to fold",
+            ],
+            "proactive":  "Auto-generates scripts when lead is queued for contact",
+            "learns":     "After deals: updates best openers, winning tactics, conditions that close",
+        },
+        {
+            "name":       "ClosingAgent — The Paper Pusher",
+            "model":      "Opus 4",
+            "role":       "Generates legally-structured contracts — pure Python (no API cost)",
+            "skills":     [
+                "6 contract types: Assignment, Purchase/Sale, Subject-To, Seller Finance, Lease-Option, Double Close",
+                "AI Seller Offer Packet with deal summary + comps + strategy pitch",
+                "Auto-selects correct contract based on deal strategy",
+                "Saves every contract as timestamped .txt file",
+            ],
+            "proactive":  "Triggered automatically when deal scores 7+ and strategy is selected",
+            "learns":     "Tracks which contract types and timelines produce fastest closes",
+        },
+        {
+            "name":       "AgentRunner — The Orchestrator",
+            "model":      "No AI — pure Python",
+            "role":       "Schedules agents, manages pipeline state, triggers self-improvement cycle",
+            "skills":     [
+                "Runs full pipeline: Lead → Enrich → Analyze → Close",
+                "Background mode: auto-scans every N hours via daemon thread",
+                "Checks needs_learning() flag — fires all 3 agent.learn() after 5 wins",
+                "Dashboard: live stats, active leads, high-margin deals, activity log",
+            ],
+            "proactive":  "Always running in background once started (menu option 26)",
+            "learns":     "Routes learning results back to each specialized agent",
+        },
+    ]
+
+    roster_lines = []
+    for ag in AGENT_ROSTER:
+        roster_lines.append(f"[bold cyan]▶ {ag['name']}[/bold cyan]  [dim]({ag['model']})[/dim]")
+        roster_lines.append(f"  [italic]{ag['role']}[/italic]")
+        for sk in ag["skills"]:
+            roster_lines.append(f"    [green]•[/green] {sk}")
+        roster_lines.append(f"  [yellow]⚡ Proactive:[/yellow] {ag['proactive']}")
+        roster_lines.append(f"  [magenta]🧠 Learns:[/magenta]  {ag['learns']}")
+        roster_lines.append("")
+
+    console.print(Panel(
+        "\n".join(roster_lines),
+        title="[bold yellow]AGENT ROSTER — SPECIALIZED ROLES[/bold yellow]",
+        border_style="yellow",
+        padding=(0, 1),
+    ))
+
+    # ── Performance Summary ────────────────────────────────────────────────
     status_str = "[bold green]● RUNNING[/bold green]" if dash["running"] else "[dim]○ Idle[/dim]"
     console.print(Panel(
         f"  Status:          {status_str}\n\n"

@@ -21,7 +21,11 @@ from modules.web_scraper import (
 )
 from modules.deal_browser import all_strategies_analysis, HOT_MARKETS
 
+# Deep-reasoning model for self-improvement / pattern learning (Opus)
 MODEL = "claude-opus-4-8"
+# Fast triage model for high-frequency lead scoring — ~15× cheaper than Opus
+# Override with env var WHOLESALE_AI_SCORING_MODEL if you want Opus quality here
+SCORING_MODEL = os.getenv("WHOLESALE_AI_SCORING_MODEL", "claude-haiku-4-5-20251001")
 
 SYSTEM_PROMPT = """You are the Lead Agent for a real estate wholesale operation.
 Your ONLY job is to find and score potential deals.
@@ -202,7 +206,7 @@ class LeadAgent:
 
         try:
             resp = self.client.messages.create(
-                model=MODEL,
+                model=SCORING_MODEL,
                 max_tokens=1500,
                 system=SYSTEM_PROMPT,
                 messages=[{
