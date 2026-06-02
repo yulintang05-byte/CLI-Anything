@@ -7,6 +7,8 @@ Macon GA, Jackson MS, Toledo OH, Saint Louis MO
 """
 from typing import Optional
 
+from modules.finance_math import monthly_payment
+
 
 # ── Real Government Property Sources by Market ───────────────────────────────
 
@@ -261,15 +263,8 @@ def all_strategies_analysis(
     # ── STRATEGY 2: BRRRR (Buy, Rehab, Rent, Refinance, Repeat) ──────────
     refi_ltv = 0.75
     refi_rate = 0.075          # Current DSCR/investment loan rate
-    refi_n = 30 * 12
-    monthly_refi_rate = refi_rate / 12
     refi_loan = arv * refi_ltv
-
-    if monthly_refi_rate > 0:
-        refi_payment = refi_loan * (monthly_refi_rate * (1 + monthly_refi_rate) ** refi_n) / \
-                       ((1 + monthly_refi_rate) ** refi_n - 1)
-    else:
-        refi_payment = refi_loan / refi_n
+    refi_payment = monthly_payment(refi_loan, refi_rate, 30)
 
     cash_back = refi_loan - all_in
     capital_recycled_pct = max(0, min(100, (cash_back / all_in * 100))) if all_in > 0 else 0
@@ -297,11 +292,7 @@ def all_strategies_analysis(
         dscr_down = all_in
     else:
         dscr_loan_amt = price * 0.80
-        if monthly_refi_rate > 0:
-            dscr_payment = dscr_loan_amt * (monthly_refi_rate * (1 + monthly_refi_rate) ** refi_n) / \
-                           ((1 + monthly_refi_rate) ** refi_n - 1)
-        else:
-            dscr_payment = dscr_loan_amt / refi_n
+        dscr_payment = monthly_payment(dscr_loan_amt, refi_rate, 30)
 
     noi_annual = (eff_rent - est_monthly_tax - est_monthly_ins - mgmt_fee) * 12
     dscr_ratio = noi_annual / (dscr_payment * 12) if dscr_payment > 0 else 0

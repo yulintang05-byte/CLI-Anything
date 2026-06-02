@@ -2,6 +2,7 @@
 BRRRR Calculator — Buy, Rehab, Rent, Refinance, Repeat.
 The strategy Tranchi.ai teaches for building a portfolio with recycled capital.
 """
+from modules.finance_math import monthly_payment
 
 
 def calc_brrrr(
@@ -35,12 +36,7 @@ def calc_brrrr(
 
     # Phase 4: REFINANCE
     refi_loan = arv * refinance_ltv
-    monthly_rate = refinance_rate / 12
-    n = refinance_years * 12
-    if monthly_rate > 0:
-        refi_payment = refi_loan * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
-    else:
-        refi_payment = refi_loan / n
+    refi_payment = monthly_payment(refi_loan, refinance_rate, refinance_years)
 
     # Cash returned at refinance
     cash_out = refi_loan - all_in_cost  # Positive = you got money back

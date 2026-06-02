@@ -4,6 +4,8 @@ Deal Calculator — MAO, ARV, ROI, cash flow, and wholesale fee math.
 from dataclasses import dataclass, field
 from typing import Optional
 
+from modules.finance_math import monthly_payment
+
 
 @dataclass
 class DealInputs:
@@ -141,13 +143,8 @@ def cash_flow_analysis(
     """Full buy-and-hold cash flow analysis."""
     down = purchase_price * down_pct
     loan = purchase_price - down
-    monthly_rate = interest_rate / 12
-    n = loan_years * 12
     # Mortgage payment (P&I)
-    if monthly_rate > 0:
-        pmt = loan * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
-    else:
-        pmt = loan / n
+    pmt = monthly_payment(loan, interest_rate, loan_years)
 
     gross_monthly = monthly_rent
     vacancy_loss = gross_monthly * vacancy_rate

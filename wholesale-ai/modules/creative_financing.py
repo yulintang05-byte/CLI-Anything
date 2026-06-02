@@ -5,6 +5,8 @@ DSCR loans, wrap mortgages, and lease options.
 from dataclasses import dataclass
 from typing import Optional
 
+from modules.finance_math import monthly_payment, remaining_balance
+
 
 # ── DSCR (Debt-Service Coverage Ratio) ───────────────────────────────────────
 
@@ -96,7 +98,8 @@ def calc_subject_to(
 
     rate_savings = 0
     if existing_rate < 0.065:  # Below current market (~7%)
-        market_payment = existing_loan_balance * (0.07 / 12) * (1.07 / 12) ** 360 / ((1.07 / 12) ** 360 - 1)
+        # What a NEW 30-yr loan on the same balance would cost at today's ~7%.
+        market_payment = monthly_payment(existing_loan_balance, 0.07, 30)
         rate_savings = (market_payment - existing_monthly_payment) * 12
 
     return {
@@ -141,19 +144,14 @@ def calc_seller_finance(
     Buyer makes monthly payments directly to seller.
     """
     loan_amount = purchase_price - down_payment
-    monthly_rate = interest_rate / 12
     n = loan_years * 12
 
-    if monthly_rate > 0:
-        payment = loan_amount * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
-    else:
-        payment = loan_amount / n
+    payment = monthly_payment(loan_amount, interest_rate, loan_years)
 
     balloon_balance = 0
     if balloon_years and balloon_years < loan_years:
         # Remaining balance after balloon_years
-        n_paid = balloon_years * 12
-        balloon_balance = loan_amount * ((1 + monthly_rate) ** n - (1 + monthly_rate) ** n_paid) / ((1 + monthly_rate) ** n - 1)
+        balloon_balance = remaining_balance(loan_amount, interest_rate, loan_years, balloon_years)
 
     monthly_cf = monthly_rent - payment if monthly_rent else 0
     total_interest = (payment * n) - loan_amount

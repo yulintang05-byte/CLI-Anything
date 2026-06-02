@@ -9,6 +9,7 @@ who will say yes, scoring how good the terms are, and arming you with the pitch.
 The math lives in modules.creative_financing.calc_seller_finance — this module
 is about sourcing, qualifying the seller, and analyzing total entry cost.
 """
+from modules.finance_math import monthly_payment
 
 # ── Where owner-financed deals actually live ───────────────────────────────────
 
@@ -142,12 +143,7 @@ def calc_owner_finance_entry(
     loan_amount  = purchase_price - down_payment
     cash_to_close = down_payment + closing_costs
 
-    monthly_rate = interest_rate / 12
-    n = max(loan_years * 12, 1)
-    if monthly_rate > 0:
-        pi = loan_amount * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
-    else:
-        pi = loan_amount / n
+    pi = monthly_payment(loan_amount, interest_rate, loan_years)
 
     total_monthly = pi + monthly_taxes_ins
     monthly_cf    = (monthly_rent - total_monthly) if monthly_rent else 0
