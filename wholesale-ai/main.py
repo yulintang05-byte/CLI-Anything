@@ -81,6 +81,10 @@ from modules.luxury_wholesale import (
     LUXURY_MARKETS, LUXURY_DEAL_SOURCES, LUXURY_DEVELOPER_BUYERS,
     LUXURY_DEAL_ANALYSIS, calc_luxury_deal,
 )
+from modules.owner_finance import (
+    OWNER_FINANCE_SOURCES, MOTIVATION_SIGNALS, IDEAL_SELLER_PROFILE,
+    NEGOTIATION_PITCH, calc_owner_finance_entry,
+)
 from modules.web_scraper      import (
     scrape_craigslist_fsbo, get_dlba_listings,
     get_tax_deed_listings, get_hud_listings_url,
@@ -198,6 +202,7 @@ def main_menu():
 
             "  [bold green]── CLOSE & SCALE ────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][12][/bold cyan] Deal Pipeline / CRM\n"
+            "  [bold cyan][30][/bold cyan] [bold]Owner-Financing Finder[/bold] — Low Entry, Motivated Sellers\n"
             "  [bold cyan][13][/bold cyan] Creative Financing\n"
             "  [bold cyan][14][/bold cyan] Section 8 / VASH Tenant Guide\n"
             "  [bold cyan][15][/bold cyan] Find Cash Buyers, Developers & Motivated Sellers\n"
@@ -216,7 +221,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -278,6 +283,8 @@ def main_menu():
             menu_investor_profile()
         elif choice == "29":
             menu_tenant_screener()
+        elif choice == "30":
+            menu_owner_finance()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -2624,6 +2631,133 @@ def _record_deal_outcome():
     console.print(f"\n[green]✓ Outcome recorded. Agents will learn from this![/green]")
     if outcome == "won":
         console.print(f"[bold green]  🎉 ${fee:,.0f} earned![/bold green]")
+
+
+# ── 30. Owner-Financing Finder ─────────────────────────────────────────────────
+
+def menu_owner_finance():
+    section("OWNER-FINANCING FINDER")
+    console.print(
+        "[dim]The lowest-barrier way in: the seller becomes the bank. No loan "
+        "qualification, low down payment, fast close. This finds the sellers who say yes.[/dim]\n"
+    )
+
+    console.print(
+        "  [1] Where to FIND owner-financed deals (sources)\n"
+        "  [2] Seller motivation signals — who will carry the note\n"
+        "  [3] Analyze a low-entry deal (down, monthly, cash flow)\n"
+        "  [4] The pitch — how to ASK for owner financing\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0", "1", "2", "3", "4"], default="3")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        _of_sources()
+    elif sub == "2":
+        _of_signals()
+    elif sub == "3":
+        _of_analyze()
+    elif sub == "4":
+        _of_pitch()
+
+    press_enter()
+
+
+def _of_sources():
+    console.print("\n[bold green]── WHERE OWNER-FINANCED DEALS LIVE ──[/bold green]\n")
+    for name, info in OWNER_FINANCE_SOURCES.items():
+        console.print(f"[bold cyan]▶ {name}[/bold cyan]")
+        if info.get("url"):
+            console.print(f"  [dim]{info['url']}[/dim]")
+        console.print(f"  {info['how']}")
+        console.print(f"  [yellow]💡 {info['tip']}[/yellow]\n")
+
+
+def _of_signals():
+    console.print("\n[bold green]── WHO WILL CARRY THE NOTE ──[/bold green]\n")
+    t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+    t.add_column("Signal", max_width=38)
+    t.add_column("Why it matters")
+    for sig, why in MOTIVATION_SIGNALS:
+        t.add_row(sig, why)
+    console.print(t)
+
+    console.print("\n[bold]Ideal seller profile:[/bold]")
+    for k, v in IDEAL_SELLER_PROFILE.items():
+        marker = "[red]⚠[/red]" if k == "red_flag" else "[green]✓[/green]"
+        console.print(f"  {marker} {v}")
+
+
+def _of_analyze():
+    console.print("\n[bold]Low-Entry Owner-Finance Analyzer[/bold]\n")
+    price    = FloatPrompt.ask("Purchase price")
+    down_pct = FloatPrompt.ask("Down payment % (e.g. 5)", default=5) / 100
+    rate     = FloatPrompt.ask("Interest rate % you'll offer", default=5.0) / 100
+    years    = IntPrompt.ask("Amortization (years)", default=30)
+    rent     = FloatPrompt.ask("Expected monthly rent (0 if flip/wholesale)", default=0)
+    closing  = FloatPrompt.ask("Estimated closing costs", default=2000)
+    ti       = FloatPrompt.ask("Monthly taxes + insurance", default=0) if rent else 0
+
+    r = calc_owner_finance_entry(
+        purchase_price=price,
+        down_payment_pct=down_pct,
+        interest_rate=rate,
+        loan_years=years,
+        monthly_rent=rent,
+        closing_costs=closing,
+        monthly_taxes_ins=ti,
+    )
+
+    t = Table(show_header=False, box=box.ROUNDED, title="[bold green]OWNER-FINANCE DEAL[/bold green]")
+    t.add_column("Metric", style="bold")
+    t.add_column("Value", justify="right")
+    t.add_row("Purchase Price",       currency(r["purchase_price"]))
+    t.add_row("Down Payment",         f"{currency(r['down_payment'])}  ({r['down_payment_pct']})")
+    t.add_row("[bold]CASH TO CLOSE[/bold]", f"[bold yellow]{currency(r['cash_to_close'])}[/bold yellow]")
+    t.add_row("Seller-Carried Note",  currency(r["loan_amount"]))
+    t.add_row("Interest Rate",        r["interest_rate_pct"])
+    t.add_row("Term",                 f"{r['loan_term_years']} yrs")
+    t.add_row("Monthly P&I",          currency(r["monthly_pi"]))
+    t.add_row("Monthly Total (P&I+TI)", currency(r["monthly_total"]))
+    if r["monthly_cash_flow"] != "N/A":
+        cf = r["monthly_cash_flow"]
+        cf_color = "green" if cf >= 500 else "yellow" if cf > 0 else "red"
+        t.add_row("Monthly Cash Flow", f"[{cf_color}]{currency(cf)}[/{cf_color}]")
+        t.add_row("Cash-on-Cash",      f"{r['cash_on_cash_pct']}%")
+    console.print(t)
+
+    console.print(Panel(
+        r["verdict"],
+        border_style=r["verdict_color"],
+        title="[bold]VERDICT[/bold]",
+    ))
+
+
+def _of_pitch():
+    p = NEGOTIATION_PITCH
+    console.print("\n[bold green]── HOW TO ASK FOR OWNER FINANCING ──[/bold green]\n")
+
+    console.print("[bold]The opening question:[/bold]")
+    console.print(f"  [italic green]{p['opening_question']}[/italic green]\n")
+
+    console.print("[bold]Trade price for terms:[/bold]")
+    console.print(f"  {p['full_price_for_terms']}\n")
+
+    console.print("[bold]The tax angle:[/bold]")
+    console.print(f"  [italic]{p['the_tax_angle']}[/italic]\n")
+
+    console.print("[bold]The income angle:[/bold]")
+    console.print(f"  [italic]{p['the_income_angle']}[/italic]\n")
+
+    console.print("[bold]De-risk it for the seller:[/bold]")
+    for line in p["de_risk_for_them"]:
+        console.print(f"  [green]•[/green] {line}")
+
+    console.print("\n[bold]Terms to push for:[/bold]")
+    for line in p["terms_to_push_for"]:
+        console.print(f"  [cyan]→[/cyan] {line}")
 
 
 # ── 29. Tenant Pre-Screener ───────────────────────────────────────────────────
