@@ -141,6 +141,10 @@ class AgentRunner:
         if self._running:
             return "Already running"
 
+        # Guard against interval_hours <= 0 — range(0*60) is empty, which would
+        # spin run_full_pipeline() with no sleep and run away with API spend.
+        interval_hours = max(1, int(interval_hours))
+
         self._running = True
 
         def _loop():

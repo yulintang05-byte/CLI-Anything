@@ -5,6 +5,7 @@ Scores every lead, flags HIGH MARGIN deals, queues them for DealAgent.
 Gets smarter as it learns which sources and distress signals actually close.
 """
 import os
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -75,7 +76,10 @@ class LeadAgent:
 
         # ── Source 1: Craigslist FSBO ─────────────────────────────────
         for market_str in markets:
-            city = market_str.split()[0]
+            parts = market_str.split()
+            if not parts:                      # empty / whitespace-only entry
+                continue
+            city = parts[0]
             if city in CRAIGSLIST_CITIES:
                 raw = scrape_craigslist_fsbo(city=city, max_price=max_price)
                 all_raw.extend(raw)
@@ -106,7 +110,8 @@ class LeadAgent:
                 raw["score"]  = 0
             else:
                 raw["score"]  = score_raw_lead(raw)
-                raw["status"] = "new" if raw["score"] >= self.patterns["min_lead_score"] else "low_score"
+                min_score     = self.patterns.get("min_lead_score", 6.0)
+                raw["status"] = "new" if raw["score"] >= min_score else "low_score"
 
             # Run full strategy analysis on priced leads
             if raw.get("price", 0) > 0 and raw.get("score", 0) >= 6:
@@ -182,8 +187,10 @@ class LeadAgent:
             if analysis.get("high_margin"):
                 lead["score"] = min(10.0, lead["score"] + 2.0)
 
-        except Exception:
-            pass
+        except Exception as e:
+            # Don't crash the whole run on one bad lead, but leave a trail so a
+            # real analysis bug isn't silently swallowed.
+            log_activity(self.name, "enrich_failed", f"{lead.get('title','?')}: {e}")
 
         return lead
 
@@ -226,7 +233,7 @@ class LeadAgent:
             for i, lead in enumerate(leads, 1):
                 # Lazy match up to the dash, then capture the rest of the line as
                 # reasoning. A greedy [^\n]* before (.+) would leave only 1 char.
-                m = __import__("re").search(rf"Lead {i}:\s*([\d.]+)/10[^\n]*?[—-]\s*([^\n]+)", text)
+                m = re.search(rf"Lead {i}:\s*([\d.]+)/10[^\n]*?[—-]\s*([^\n]+)", text)
                 if m:
                     lead["ai_score"]     = float(m.group(1))
                     lead["ai_reasoning"] = m.group(2).strip()

@@ -103,8 +103,8 @@ NEGOTIATION_PITCH = {
         "sale lets you spread that out — your accountant can confirm the savings.\""
     ),
     "the_income_angle": (
-        "\"Instead of one check that sits in the bank earning nothing, you'd get "
-        "${monthly}/month for {years} years — like keeping the rental without the tenants.\""
+        "\"Instead of one check that sits in the bank earning nothing, you'd collect "
+        "a steady payment every month for years — like keeping the rental without the tenants.\""
     ),
     "de_risk_for_them": [
         "Offer a meaningful (but low-for-you) down payment — 5–10% builds trust.",

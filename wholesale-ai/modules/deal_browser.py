@@ -174,13 +174,13 @@ def analyze_deal_card(
     # Below market %
     below_market_pct = ((arv - price) / arv * 100) if arv > 0 else 0
 
-    # HIGH MARGIN flag: Tranchi flags if CoC > 100% or below market > 70%
-    high_margin = (coc > 100) or (below_market_pct > 60) or (dscr > 5)
+    # HIGH MARGIN flag — kept consistent with all_strategies_analysis (>= 60)
+    high_margin = (coc > 100) or (below_market_pct >= 60) or (dscr > 5)
 
-    # DSCR label
-    if dscr >= 10:
-        dscr_label = "Strong"
-    elif dscr >= 2:
+    # DSCR label — meaningful tiers (lenders require 1.25 min)
+    if dscr >= 2.0:
+        dscr_label = "Excellent"
+    elif dscr >= 1.5:
         dscr_label = "Strong"
     elif dscr >= 1.25:
         dscr_label = "Moderate"
@@ -290,7 +290,7 @@ def all_strategies_analysis(
 
     # ── STRATEGY 3: DSCR RENTAL LOAN ─────────────────────────────────────
     # DSCR loan at 20% down (or cash-then-refi — same result)
-    dscr_down = max(price * 0.20, price)  # for tiny prices, often just buy cash
+    dscr_down = price * 0.20  # standard 20% down on a DSCR purchase loan
     if price < 50000:
         # Small properties: usually buy cash, then DSCR refi at 75% ARV
         dscr_payment = refi_payment

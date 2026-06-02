@@ -120,7 +120,10 @@ LUXURY_DEAL_ANALYSIS = {
 def calc_luxury_deal(price: float, arv: float, sqft: float, repairs: float = 0) -> dict:
     """Quick luxury deal analysis — tighter margins, higher fees."""
     mao = (arv * 0.65) - repairs
-    wholesale_fee = max(25000, (mao - price) * 0.5) if mao > price else 0  # Take half the spread
+    # Take half the spread with a $25k floor — but never more than the spread
+    # itself (a thin $500 spread can't pay a $25k fee).
+    spread = mao - price
+    wholesale_fee = min(spread, max(25000, spread * 0.5)) if spread > 0 else 0
     profit = mao - price
     roi = (profit / price * 100) if price > 0 else 0
     ppsf_ask = price / sqft if sqft > 0 else 0
