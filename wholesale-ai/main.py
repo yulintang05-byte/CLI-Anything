@@ -90,6 +90,27 @@ from modules.web_scraper      import (
     get_tax_deed_listings, get_hud_listings_url,
     CRAIGSLIST_CITIES,
 )
+from modules.cash_buyers import (
+    match_buyers_to_deal, add_buyer, get_all_buyers,
+    buyer_list_summary, PLATFORMS_BY_SPEED, BUYER_PROFILES,
+    record_buyer_deal_sent, record_buyer_deal_closed,
+)
+from modules.skip_trace import (
+    SKIP_TRACE_SERVICES, FREE_SKIP_TRACE_METHODS, ABSENTEE_OWNER_SIGNALS,
+    get_lookup_links, absentee_check_from_lead, get_motivated_lead_sources,
+)
+from modules.outreach import (
+    SELLER_TYPES, get_all_scripts, generate_sms,
+    generate_cold_call_script, generate_email, generate_voicemail,
+    generate_direct_mail_postcard, generate_door_knock_script,
+    detect_seller_type_from_lead,
+)
+from modules.comps import (
+    validate_arv, quick_comp_check, FREE_COMP_SOURCES, adjust_comp,
+)
+from modules.daily_digest import (
+    generate_morning_digest, get_last_digest, get_pipeline_health,
+)
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -122,11 +143,22 @@ BANNER = """[bold green]
 
 def show_banner():
     console.print(BANNER)
-    ai_status = "[green]✓ Active[/green]" if os.getenv("ANTHROPIC_API_KEY") else "[red]✗ Not set (add to .env)[/red]"
-    hud_status = "[green]✓ Active[/green]" if os.getenv("HUD_API_TOKEN") else "[yellow]○ Optional (huduser.gov)[/yellow]"
-    summary = pipeline_summary()
+    ai_status  = "[green]✓ Active[/green]" if os.getenv("ANTHROPIC_API_KEY") else "[red]✗ Not set (add to .env)[/red]"
+    hud_status = "[green]✓ Active[/green]" if os.getenv("HUD_API_TOKEN") else "[yellow]○ Optional[/yellow]"
+    rc_status  = "[green]✓ Live feed[/green]" if os.getenv("RENTCAST_API_KEY") else "[dim]○ Sample mode[/dim]"
+    summary    = pipeline_summary()
     pipe_status = f"[cyan]{summary['active_deals']} active deals | ${summary['closed_fees']:,.0f} closed[/cyan]"
-    console.print(f"  AI Advisor: {ai_status}   HUD FMR API: {hud_status}   Pipeline: {pipe_status}\n")
+
+    # Quick digest check — show alert if there are high-margin leads waiting
+    last = get_last_digest()
+    digest_alert = ""
+    if last and last.get("high_margin_24h", 0) > 0:
+        digest_alert = f"  [bold green]⭐ {last['high_margin_24h']} HIGH MARGIN deal(s) waiting — option 33[/bold green]\n"
+
+    console.print(
+        f"  AI: {ai_status}   HUD: {hud_status}   RentCast: {rc_status}   Pipeline: {pipe_status}\n"
+        + digest_alert
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -233,6 +265,13 @@ def main_menu():
             "  [bold cyan][16][/bold cyan] LLC Formation Guide\n"
             "  [bold cyan][29][/bold cyan] Pre-Screen Tenants\n\n"
 
+            "  [bold green]── OUTREACH & CLOSE ────────────────────────────────────────[/bold green]\n"
+            "  [bold cyan][31][/bold cyan] [bold]Cash Buyer Matcher[/bold] — Who to assign this deal to RIGHT NOW\n"
+            "  [bold cyan][32][/bold cyan] Skip Trace — Find the owner's phone + email\n"
+            "  [bold cyan][33][/bold cyan] [bold]Morning Digest[/bold] — Today's deals, pipeline, action items\n"
+            "  [bold cyan][34][/bold cyan] Outreach Script Generator (SMS, call, email, door knock)\n"
+            "  [bold cyan][35][/bold cyan] Comp Validator — Is your ARV right?\n\n"
+
             "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
             "  [bold cyan][17][/bold cyan] Wholesale Strategy Guide\n"
@@ -245,7 +284,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -309,6 +348,16 @@ def main_menu():
             menu_tenant_screener()
         elif choice == "30":
             menu_owner_finance()
+        elif choice == "31":
+            menu_cash_buyer_matcher()
+        elif choice == "32":
+            menu_skip_trace()
+        elif choice == "33":
+            menu_morning_digest()
+        elif choice == "34":
+            menu_outreach_scripts()
+        elif choice == "35":
+            menu_comp_validator()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -464,6 +513,10 @@ def display_full_deal_card(data: dict, address: str = "", badge: str = ""):
     # ── Auto tenant pre-screen (fires on any rental deal) ───────────────
     _show_prescreen(data.get("market_rent", 0), sec8.get("fmr_est", 0))
 
+    # ── Cash buyer match (fires automatically on HIGH MARGIN deals) ──────
+    if data.get("high_margin"):
+        _show_cash_buyer_match(data, address)
+
 
 def _show_prescreen(market_rent: float, fmr: float = 0):
     """Instant tenant-qualification bar for a rental deal. Uses LIVE rent +
@@ -486,6 +539,174 @@ def _show_prescreen(market_rent: float, fmr: float = 0):
         f"  [dim]Fastest fill: {q['fastest_fill'][0]}; require 3× income proof up front.[/dim]",
         title="[bold cyan]🧍 TENANT PRE-SCREEN (auto)[/bold cyan]",
         border_style="cyan",
+    ))
+
+
+def _one_click_close_package(lead: dict):
+    """
+    Full close package for a HIGH MARGIN deal — runs automatically.
+    Generates: outreach scripts + negotiation + contract + pipeline entry.
+    Alberto only needs to sign.
+    """
+    section("⚡ ONE-CLICK CLOSE PACKAGE")
+    analysis = lead.get("full_analysis", {})
+    address  = lead.get("title", "Unknown")
+    price    = lead.get("price", 0)
+    arv      = analysis.get("arv", price * 2)
+    repairs  = analysis.get("repairs", 0)
+    strategy = analysis.get("best_strategy", "Wholesale")
+    mao_val  = analysis.get("flip", {}).get("mao", price)
+
+    # 1. Auto-detect seller type from lead signals
+    seller_type = detect_seller_type_from_lead(lead)
+    profile = load_profile()
+    inv_name  = profile.get("name", "Alberto Soriano")
+    inv_phone = profile.get("phone", "")
+    inv_email = profile.get("email", "")
+
+    console.print(f"\n[bold]Building full close package for:[/bold] {address}\n")
+
+    # 2. Outreach scripts
+    scripts = get_all_scripts(
+        seller_type=seller_type, property_address=address,
+        investor_name=inv_name, investor_phone=inv_phone,
+        investor_email=inv_email, offer_price=mao_val, arv=arv,
+    )
+    console.print(Panel(
+        f"[bold]Auto-detected seller type:[/bold] [cyan]{scripts['seller_type']}[/cyan]\n\n"
+        f"[bold green]SMS (send first):[/bold green]\n{scripts['sms']}\n\n"
+        f"[bold yellow]Call opener:[/bold yellow]\n{scripts['cold_call']['opener'][:250]}",
+        title="[bold green]1. OUTREACH SCRIPTS — READY TO SEND[/bold green]",
+        border_style="green",
+    ))
+
+    # 3. Auto add to pipeline
+    deal_in_pipe = add_deal(
+        address=address, asking_price=price, arv=arv, repairs=repairs,
+        mao=mao_val, wholesale_fee=analysis.get("flip", {}).get("wholesale_fee", 10000),
+        source=lead.get("source", "Agent"), stage="Lead",
+        notes=f"HIGH MARGIN auto-added. Strategy: {strategy}. Score: {lead.get('score',0):.1f}",
+    )
+    console.print(f"[green]✓ Added to pipeline — ID: {deal_in_pipe['id']}[/green]")
+
+    # 4. Cash buyer match
+    city  = address.split(",")[0].strip() if "," in address else address[:20]
+    state = address.split(",")[-1].strip()[:2] if "," in address else ""
+    buyer_result = match_buyers_to_deal(
+        price=price, arv=arv, strategy=strategy,
+        city=city, state=state,
+        market_rent=analysis.get("market_rent", 0),
+        repairs=repairs, is_high_margin=True,
+    )
+    ranked_buyers = buyer_result.get("ranked_buyer_types", [])[:2]
+    if ranked_buyers:
+        buyer_lines = []
+        for bname, bp in ranked_buyers:
+            buyer_lines.append(f"  [bold]{bname}[/bold]: {bp.get('find_at',[''])[0]}")
+        console.print(Panel(
+            "\n".join(buyer_lines) + f"\n\n[dim]Script:[/dim] {buyer_result['scripts']['text'][:120]}",
+            title="[bold cyan]2. BUYER MATCH — WHO GETS THIS CONTRACT[/bold cyan]",
+            border_style="cyan",
+        ))
+
+    # 5. Save full package to file
+    if Confirm.ask("\nSave full package to file?", default=True):
+        safe   = address.replace(" ", "_").replace(",", "")[:30]
+        fname  = f"close_package_{safe}.txt"
+        email  = scripts["email"]
+        content = f"""CLOSE PACKAGE — {address}
+Generated: {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}
+Pipeline ID: {deal_in_pipe['id']}
+
+=== DEAL NUMBERS ===
+Price: ${price:,.0f} | ARV: ${arv:,.0f} | Repairs: ${repairs:,.0f} | MAO: ${mao_val:,.0f}
+Strategy: {strategy}
+
+=== OUTREACH ===
+SMS:
+{scripts['sms']}
+
+VOICEMAIL:
+{scripts['voicemail']}
+
+COLD CALL OPENER:
+{scripts['cold_call']['opener']}
+
+EMAIL SUBJECT: {email['subject']}
+EMAIL:
+{email['body']}
+
+=== FOLLOW-UP SEQUENCE ===
+{chr(10).join(scripts['follow_up_sequence'])}
+"""
+        Path(fname).write_text(content)
+        console.print(f"[green]✓ Full package saved to {fname}[/green]")
+
+    console.print(Panel(
+        f"  [bold green]✓ Pipeline entry created[/bold green]  ID: {deal_in_pipe['id']}\n"
+        f"  [bold green]✓ Outreach scripts ready[/bold green]  (SMS → call → email)\n"
+        f"  [bold green]✓ Buyer match complete[/bold green]   (who to assign to)\n\n"
+        f"  [bold yellow]NEXT STEP:[/bold yellow] Send the SMS above to the seller NOW.\n"
+        f"  When they respond: run negotiation script (option 26 → option 4)\n"
+        f"  When they accept: generate contract (option 26 → option 5)",
+        title="[bold green]⚡ PACKAGE COMPLETE — Alberto only signs[/bold green]",
+        border_style="green",
+    ))
+
+
+def _show_cash_buyer_match(data: dict, address: str = ""):
+    """Auto-fire buyer matching on HIGH MARGIN deals — shows who to call FIRST."""
+    profile = load_profile()
+    result  = match_buyers_to_deal(
+        price        = data.get("price", 0),
+        arv          = data.get("arv", 0),
+        strategy     = data.get("best_strategy", "Wholesale"),
+        city         = address.split(",")[0].strip() if "," in address else address,
+        state        = address.split(",")[-1].strip() if "," in address else "",
+        market_rent  = data.get("market_rent", 0),
+        bedrooms     = data.get("bedrooms", 3),
+        repairs      = data.get("repairs", 0),
+        is_high_margin = True,
+    )
+
+    ranked = result.get("ranked_buyer_types", [])[:3]
+    personal = result.get("personal_matches", [])
+    scripts  = result.get("scripts", {})
+
+    lines = []
+    if personal:
+        lines.append("[bold green]YOUR PERSONAL BUYER LIST — CALL FIRST:[/bold green]")
+        for b in personal[:3]:
+            lines.append(
+                f"  [bold]{b['name']}[/bold]  {b.get('phone','')}  {b.get('email','')}"
+                f"  [dim]{b.get('buyer_type','')} · {', '.join(b.get('markets',[])[:2])}[/dim]"
+            )
+        lines.append("")
+
+    if ranked:
+        lines.append("[bold yellow]BEST BUYER TYPES FOR THIS DEAL:[/bold yellow]")
+        for i, (buyer_type, profile_data) in enumerate(ranked, 1):
+            lines.append(f"  [cyan]{i}.[/cyan] [bold]{buyer_type}[/bold]  [dim]{profile_data.get('pitch','')[:70]}[/dim]")
+            find_list = profile_data.get("find_at", [])
+            if find_list:
+                lines.append(f"     → {find_list[0]}")
+        lines.append("")
+
+    # Top platform
+    top_platform = result["platforms"][0] if result.get("platforms") else None
+    if top_platform:
+        lines.append(
+            f"[bold]FASTEST way to a buyer:[/bold] [green]{top_platform['name']}[/green] "
+            f"({top_platform['speed']}) — {top_platform['how'][:70]}"
+        )
+        lines.append("")
+
+    lines.append(f"[dim]READY TEXT:[/dim] {scripts.get('text','')[:120]}")
+
+    console.print(Panel(
+        "\n".join(lines),
+        title="[bold green]🎯 CASH BUYER MATCH — WHO TO CALL RIGHT NOW[/bold green]",
+        border_style="green",
     ))
 
 
@@ -2125,6 +2346,8 @@ def menu_live_leads():
                 badge=lead.get("source", ""),
             )
             console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
+            if Confirm.ask("  [bold green]⚡ Generate FULL CLOSE PACKAGE for this deal?[/bold green]", default=True):
+                _one_click_close_package(lead)
             if not Confirm.ask("See next deal?", default=True):
                 break
     elif analyzed:
@@ -3043,6 +3266,510 @@ def menu_tenant_screener():
             t.add_row(svc_name, svc.get("cost",""), svc.get("checks",""), svc.get("url",""))
         console.print(t)
         console.print("\n[bold yellow]Tip:[/bold yellow] Charge application fee to tenant — legal and standard practice.")
+
+    press_enter()
+
+
+# ── 31. Cash Buyer Matcher ────────────────────────────────────────────────────
+
+def menu_cash_buyer_matcher():
+    section("CASH BUYER MATCHER — WHO BUYS THIS DEAL")
+    console.print("[dim]Instantly match your deal to the right buyer type, "
+                  "your personal buyer list, and the platforms to find new buyers fast.[/dim]\n")
+
+    console.print(
+        "  [1] Match a specific deal to buyers\n"
+        "  [2] Add a buyer to my personal list\n"
+        "  [3] View my buyer list\n"
+        "  [4] Browse buyer-finding platforms\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        console.print("\n[bold]Deal Details[/bold]\n")
+        price    = FloatPrompt.ask("Purchase / assignment price")
+        arv      = FloatPrompt.ask("ARV")
+        repairs  = FloatPrompt.ask("Estimated repairs", default=0)
+        strategy = Prompt.ask("Strategy", choices=["Wholesale","Flip","BRRRR","Buy & Hold","Section 8","Owner Finance"], default="Wholesale")
+        city     = Prompt.ask("City (e.g. Detroit)", default="")
+        state    = Prompt.ask("State abbreviation", default="MI").upper()
+        beds     = IntPrompt.ask("Bedrooms", default=3)
+        rent     = FloatPrompt.ask("Monthly rent estimate (0 if flip/wholesale)", default=0)
+
+        result = match_buyers_to_deal(
+            price=price, arv=arv, strategy=strategy,
+            city=city, state=state, market_rent=rent,
+            bedrooms=beds, repairs=repairs, is_high_margin=True,
+        )
+
+        ranked   = result["ranked_buyer_types"]
+        personal = result["personal_matches"]
+        scripts  = result["scripts"]
+        platforms = result["platforms"]
+
+        if personal:
+            console.print(f"\n[bold green]✓ {len(personal)} buyer(s) in YOUR LIST match this deal:[/bold green]")
+            t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+            t.add_column("Name", style="bold")
+            t.add_column("Phone")
+            t.add_column("Email")
+            t.add_column("Type")
+            t.add_column("Markets")
+            for b in personal:
+                t.add_row(b["name"], b.get("phone","—"), b.get("email","—"),
+                          b.get("buyer_type",""), ", ".join(b.get("markets",[])[:2]))
+            console.print(t)
+        else:
+            console.print("\n[yellow]No buyers in your personal list yet — add them as you meet them (option 2).[/yellow]")
+
+        console.print(f"\n[bold cyan]── TOP BUYER TYPES FOR THIS DEAL ──[/bold cyan]\n")
+        for i, (buyer_type, bp) in enumerate(ranked[:3], 1):
+            color = "green" if i == 1 else "cyan" if i == 2 else "yellow"
+            console.print(f"  [{color}][bold]#{i}: {buyer_type}[/bold][/{color}]")
+            console.print(f"     Wants: {bp.get('wants','')[:80]}")
+            console.print(f"     Pitch: [italic]{bp.get('pitch','')[:80]}[/italic]")
+            console.print(f"     Close time: [green]{bp.get('daysToClose','')}[/green]")
+            find_at = bp.get("find_at", [])
+            if find_at:
+                console.print(f"     Find them: {find_at[0]}")
+            console.print()
+
+        console.print("[bold yellow]── FASTEST PLATFORMS ──[/bold yellow]")
+        t2 = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+        t2.add_column("Platform", style="bold")
+        t2.add_column("Speed")
+        t2.add_column("Cost")
+        t2.add_column("How")
+        for p in platforms[:5]:
+            t2.add_row(p["name"], p["speed"], p["cost"], p["how"][:60])
+        console.print(t2)
+
+        console.print(Panel(
+            f"[bold]TEXT TO SEND:[/bold]\n{scripts['text']}\n\n"
+            f"[bold]EMAIL SUBJECT:[/bold] {scripts['email_subject']}\n\n"
+            f"[bold]COLD CALL OPENER:[/bold]\n{scripts['cold_call_opener'][:200]}",
+            title="[bold green]OUTREACH SCRIPTS — COPY & SEND[/bold green]",
+            border_style="green",
+        ))
+
+    elif sub == "2":
+        console.print("\n[bold]Add a Cash Buyer to Your List[/bold]\n")
+        name     = Prompt.ask("Buyer name")
+        phone    = Prompt.ask("Phone", default="")
+        email    = Prompt.ask("Email", default="")
+        btype    = Prompt.ask("Buyer type", choices=list(BUYER_PROFILES.keys()), default="Fix & Flip Investor")
+        markets  = Prompt.ask("Markets (comma-separated, e.g. Detroit, Birmingham)", default="")
+        p_min    = FloatPrompt.ask("Min deal price they buy", default=0)
+        p_max    = FloatPrompt.ask("Max deal price they buy", default=200000)
+        notes    = Prompt.ask("Notes (criteria, preferences)", default="")
+
+        b = add_buyer(
+            name=name, phone=phone, email=email,
+            markets=[m.strip() for m in markets.split(",") if m.strip()],
+            buyer_type=btype, price_min=p_min, price_max=p_max, notes=notes,
+        )
+        console.print(f"\n[green]✓ Buyer added! ID: {b['id']}[/green]")
+        console.print("[dim]Next time you match a deal, this buyer will appear automatically.[/dim]")
+
+    elif sub == "3":
+        buyers = get_all_buyers()
+        if not buyers:
+            console.print("[yellow]No buyers yet — add your first buyer (option 2).[/yellow]")
+        else:
+            t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED, title="MY BUYER LIST")
+            t.add_column("ID", width=8)
+            t.add_column("Name", style="bold")
+            t.add_column("Phone")
+            t.add_column("Type")
+            t.add_column("Markets")
+            t.add_column("Price Range", justify="right")
+            t.add_column("Deals")
+            for b in buyers:
+                t.add_row(
+                    b.get("id",""), b.get("name",""), b.get("phone",""),
+                    b.get("buyer_type",""), ", ".join(b.get("markets",[])[:2]),
+                    f"${b.get('price_min',0):,.0f}–${b.get('price_max',0):,.0f}",
+                    f"sent:{b.get('deals_sent',0)} closed:{b.get('deals_closed',0)}",
+                )
+            console.print(t)
+
+    elif sub == "4":
+        console.print("\n[bold cyan]── BUYER-FINDING PLATFORMS (fastest → slowest) ──[/bold cyan]\n")
+        for p in PLATFORMS_BY_SPEED:
+            speed_color = "green" if "Same day" in p["speed"] or "1-2" in p["speed"] else "yellow"
+            console.print(f"  [bold]{p['name']}[/bold]  [{speed_color}]{p['speed']}[/{speed_color}]  [dim]{p['cost']}[/dim]")
+            console.print(f"    {p['how']}")
+            if p.get("url") and "facebook" not in p["url"]:
+                console.print(f"    [dim]{p['url']}[/dim]")
+            console.print()
+
+    press_enter()
+
+
+# ── 32. Skip Trace ────────────────────────────────────────────────────────────
+
+def menu_skip_trace():
+    section("SKIP TRACE — FIND THE OWNER")
+    console.print("[dim]Get the seller's phone, email, and mailing address from any property. "
+                  "Free methods first. Paid options for instant bulk results.[/dim]\n")
+
+    console.print(
+        "  [1] Lookup links for a specific address\n"
+        "  [2] Free skip trace methods (step-by-step)\n"
+        "  [3] Paid skip trace services (fastest)\n"
+        "  [4] Pre-motivated seller lead sources (gold mine lists)\n"
+        "  [5] Absentee owner signals — who's most motivated\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        address  = Prompt.ask("Property address")
+        city     = Prompt.ask("City")
+        state    = Prompt.ask("State (e.g. MI)").upper()
+        zip_code = Prompt.ask("Zip code (optional)", default="")
+
+        links = get_lookup_links(address, city, state, zip_code)
+        console.print(Panel(
+            "\n".join(f"  [bold]{k}:[/bold] {v}" for k, v in links.items()),
+            title=f"[bold cyan]SKIP TRACE LINKS — {address}[/bold cyan]",
+            border_style="cyan",
+        ))
+        console.print("\n[bold yellow]Process:[/bold yellow]")
+        console.print("  1. Start with County Records (NETR) → get owner name + mailing address")
+        console.print("  2. Google the owner name + city → find phone/email")
+        console.print("  3. If stuck: pay BatchSkipTracing $0.17 → instant phone + email")
+
+    elif sub == "2":
+        console.print("\n[bold green]── FREE SKIP TRACE METHODS ──[/bold green]\n")
+        for method, info in FREE_SKIP_TRACE_METHODS.items():
+            console.print(f"  [bold cyan]{method}[/bold cyan]  [dim]({info['time']})[/dim]")
+            console.print(f"    {info['description']}")
+            console.print(f"    How: [italic]{info['how']}[/italic]")
+            console.print(f"    Gets you: [green]{info['what_you_get']}[/green]")
+            if info.get("url"):
+                console.print(f"    [dim]{info['url']}[/dim]")
+            console.print()
+
+    elif sub == "3":
+        console.print("\n[bold green]── PAID SKIP TRACE SERVICES (FASTEST) ──[/bold green]\n")
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Service", style="bold")
+        t.add_column("Cost")
+        t.add_column("Speed")
+        t.add_column("Data")
+        t.add_column("URL")
+        for name, svc in SKIP_TRACE_SERVICES.items():
+            t.add_row(name, svc["cost"], svc["speed"], svc["data"][:45], svc["url"])
+        console.print(t)
+        console.print("\n[bold yellow]Recommendation:[/bold yellow]")
+        console.print("  Start: BatchSkipTracing.com — best quality, $0.17/record")
+        console.print("  Quick single: SkipGenie.com — $0.10-0.15 instant")
+        console.print("  All-in-one: PropStream — comps + skip trace + outreach together")
+
+    elif sub == "4":
+        console.print("\n[bold green]── PRE-MOTIVATED SELLER LEAD SOURCES ──[/bold green]\n")
+        console.print("[dim]These lists are gold — owners with problems who NEED to sell.[/dim]\n")
+        sources = get_motivated_lead_sources()
+        for source, info in sources.items():
+            motivation_color = "green" if "10/10" in str(info["motivation"]) else \
+                               "yellow" if "9/10" in str(info["motivation"]) or "8/10" in str(info["motivation"]) else "white"
+            console.print(f"  [bold]{source}[/bold]  [{motivation_color}]Motivation: {info['motivation']}[/{motivation_color}]")
+            console.print(f"    {info['description']}")
+            console.print(f"    How to get: [italic]{info['how_to_get']}[/italic]")
+            free_str = "[green]FREE[/green]" if info["free"] is True else f"[yellow]{info['free']}[/yellow]"
+            console.print(f"    Cost: {free_str}")
+            console.print()
+
+    elif sub == "5":
+        console.print("\n[bold green]── ABSENTEE OWNER SIGNALS ──[/bold green]\n")
+        console.print("[dim]The more of these signals a property has, the more motivated the owner is.[/dim]\n")
+        t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+        t.add_column("Signal", max_width=38, style="bold")
+        t.add_column("Why it means they're motivated")
+        for signal, why in ABSENTEE_OWNER_SIGNALS:
+            t.add_row(signal, why)
+        console.print(t)
+
+    press_enter()
+
+
+# ── 33. Morning Digest ────────────────────────────────────────────────────────
+
+def menu_morning_digest():
+    section("MORNING DEAL DIGEST")
+    console.print("[dim]Your daily briefing — what the agents found, pipeline status, what to do today.[/dim]\n")
+
+    profile = load_profile()
+    target_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
+    markets = [m.strip() for m in target_markets.split(",")]
+
+    with console.status("[bold green]Compiling your morning briefing...[/bold green]"):
+        digest = generate_morning_digest(markets)
+        health = get_pipeline_health()
+
+    console.print(Panel(
+        f"  [bold]Good morning![/bold] {digest['date']}\n\n"
+        f"  [bold cyan]NEW LEADS (last 24h):[/bold cyan]  {digest['new_leads_24h']} leads · "
+        f"[bold green]{digest['high_margin_24h']} HIGH MARGIN[/bold green]\n\n"
+        f"  [bold cyan]PIPELINE:[/bold cyan]\n"
+        f"    Active deals:     {digest['pipeline']['active']}\n"
+        f"    Under contract:   [bold green]{digest['pipeline']['under_contract']}[/bold green]\n"
+        f"    Offers out:       [yellow]{digest['pipeline']['offer_sent']}[/yellow]\n"
+        f"    Marketing:        {digest['pipeline']['marketing']}\n\n"
+        f"  [bold cyan]YOUR NUMBERS:[/bold cyan]\n"
+        f"    Earned:    [bold green]${digest['stats']['total_earned']:,.0f}[/bold green]  "
+        f"    Goal: $15,000  →  "
+        f"[{'green' if digest['stats']['goal_pct'] >= 100 else 'yellow'}]{digest['stats']['goal_pct']}%[/{'green' if digest['stats']['goal_pct'] >= 100 else 'yellow'}] there\n"
+        f"    To go:     [yellow]${digest['stats']['to_go']:,.0f}[/yellow]  "
+        f"    ({1 if digest['stats']['avg_fee'] > 0 else '?'} more deal closes it)",
+        title="[bold green]☀ MORNING BRIEFING[/bold green]",
+        border_style="green",
+    ))
+
+    if digest["action_items"]:
+        console.print("\n[bold yellow]── TODAY'S ACTION ITEMS ──[/bold yellow]")
+        for i, item in enumerate(digest["action_items"], 1):
+            console.print(f"  {i}. {item}")
+
+    if health["stale"]:
+        console.print(f"\n[bold red]── STALE DEALS (no update {health['stale'][0]['days_idle']}+ days) ──[/bold red]")
+        for d in health["stale"][:3]:
+            console.print(f"  [red]•[/red] [{d['stage']}] {d['address']} — {d['days_idle']} days idle — update or kill it")
+
+    if health["urgent"]:
+        console.print(f"\n[bold red]── URGENT ──[/bold red]")
+        for d in health["urgent"]:
+            console.print(f"  [bold red]⚠[/bold red] {d['address']} — {d['stage']}")
+
+    hot = digest.get("hot_deals", [])
+    if hot:
+        console.print(f"\n[bold cyan]── HOT LEADS FROM AGENTS ──[/bold cyan]")
+        t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+        t.add_column("Score", justify="right")
+        t.add_column("Property", max_width=48)
+        t.add_column("Price", justify="right")
+        t.add_column("Strategy")
+        for lead in hot[:5]:
+            score = lead.get("score", 0)
+            sc    = "green" if score >= 8 else "yellow"
+            t.add_row(f"[{sc}]{score:.1f}[/{sc}]", lead.get("title","")[:48],
+                      currency(lead.get("price", 0)), lead.get("best_strategy","?"))
+        console.print(t)
+
+    console.print("\n[dim]Tip: Run option 26 to let agents scan for new deals right now.[/dim]")
+    press_enter()
+
+
+# ── 34. Outreach Script Generator ─────────────────────────────────────────────
+
+def menu_outreach_scripts():
+    section("OUTREACH SCRIPT GENERATOR")
+    console.print("[dim]Generate SMS, cold call, voicemail, email, and door knock scripts "
+                  "for any seller situation — ready to copy and send.[/dim]\n")
+
+    profile = load_profile()
+    inv_name  = profile.get("name", "Alberto Soriano")
+    inv_phone = profile.get("phone", "")
+    inv_email = profile.get("email", "")
+
+    console.print("[bold]Seller type:[/bold]")
+    type_list = list(SELLER_TYPES.items())
+    for i, (k, v) in enumerate(type_list):
+        console.print(f"  [{i:2}] {v}")
+    console.print()
+    idx = Prompt.ask("Select seller type", default="0")
+    try:
+        seller_type = type_list[int(idx)][0]
+    except (ValueError, IndexError):
+        seller_type = "generic"
+
+    address  = Prompt.ask("Property address")
+    seller_name = Prompt.ask("Seller name (optional)", default="")
+    offer_price = FloatPrompt.ask("Your offer price (0 to skip)", default=0)
+    arv         = FloatPrompt.ask("ARV (0 to skip)", default=0)
+
+    scripts = get_all_scripts(
+        seller_type     = seller_type,
+        property_address = address,
+        seller_name     = seller_name,
+        investor_name   = inv_name,
+        investor_phone  = inv_phone,
+        investor_email  = inv_email,
+        offer_price     = offer_price,
+        arv             = arv,
+    )
+
+    console.print(f"\n[bold]Generated scripts for:[/bold] [cyan]{scripts['seller_type']}[/cyan]\n")
+
+    console.print(Panel(scripts["sms"], title="[bold green]📱 SMS (Copy & Text)[/bold green]", border_style="green"))
+    console.print()
+    console.print(Panel(scripts["voicemail"], title="[bold cyan]📞 VOICEMAIL SCRIPT[/bold cyan]", border_style="cyan"))
+    console.print()
+
+    call_script = scripts["cold_call"]
+    console.print(Panel(
+        f"[bold green]OPENER:[/bold green]\n{call_script['opener']}\n\n"
+        f"[bold yellow]VALUE PROP:[/bold yellow]\n{call_script['value_prop']}\n\n"
+        f"[bold cyan]CLOSE:[/bold cyan]\n{call_script['close']}\n\n"
+        f"[bold]COMMON OBJECTIONS:[/bold]\n"
+        + "\n\n".join(f"  [red]'{obj}'[/red]\n  → {resp}" for obj, resp in list(call_script["objections"].items())[:3]),
+        title="[bold yellow]📞 COLD CALL SCRIPT[/bold yellow]",
+        border_style="yellow",
+    ))
+    console.print()
+
+    email_data = scripts["email"]
+    console.print(Panel(
+        f"[bold]SUBJECT:[/bold] {email_data['subject']}\n\n{email_data['body']}",
+        title="[bold blue]📧 EMAIL[/bold blue]",
+        border_style="blue",
+    ))
+    console.print()
+    console.print(Panel(scripts["direct_mail"], title="[bold magenta]✉ DIRECT MAIL POSTCARD[/bold magenta]", border_style="magenta"))
+
+    console.print("\n[bold yellow]FOLLOW-UP SEQUENCE:[/bold yellow]")
+    for step in scripts["follow_up_sequence"]:
+        console.print(f"  {step}")
+
+    if Confirm.ask("\nSave all scripts to file?", default=False):
+        safe = address.replace(" ", "_").replace(",", "")[:30]
+        fname = f"outreach_{safe}.txt"
+        content = f"OUTREACH PACKAGE — {address}\nSeller Type: {scripts['seller_type']}\n\n"
+        content += f"SMS:\n{scripts['sms']}\n\n"
+        content += f"VOICEMAIL:\n{scripts['voicemail']}\n\n"
+        content += f"EMAIL SUBJECT: {email_data['subject']}\nEMAIL BODY:\n{email_data['body']}\n\n"
+        content += f"DIRECT MAIL:\n{scripts['direct_mail']}\n"
+        Path(fname).write_text(content)
+        console.print(f"[green]✓ Saved to {fname}[/green]")
+
+    press_enter()
+
+
+# ── 35. Comp Validator ────────────────────────────────────────────────────────
+
+def menu_comp_validator():
+    section("COMP VALIDATOR — IS YOUR ARV RIGHT?")
+    console.print("[dim]Validate your ARV against comparable sales before you make an offer. "
+                  "One bad ARV estimate kills a deal.[/dim]\n")
+
+    console.print(
+        "  [1] Quick sanity check (no comps needed)\n"
+        "  [2] Full comp validation (enter your comps)\n"
+        "  [3] Where to pull comps (free sources)\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        console.print("\n[bold]Quick ARV Sanity Check[/bold]\n")
+        price    = FloatPrompt.ask("Purchase price")
+        arv      = FloatPrompt.ask("Your ARV estimate")
+        repairs  = FloatPrompt.ask("Repair estimate")
+        fee      = FloatPrompt.ask("Wholesale fee target", default=10000)
+        sqft     = FloatPrompt.ask("Square footage", default=1200)
+        city     = Prompt.ask("City (for market benchmark)", default="")
+        state    = Prompt.ask("State", default="").upper()
+
+        result = quick_comp_check(
+            purchase_price=price, your_arv_guess=arv,
+            repairs=repairs, wholesale_fee=fee,
+            city=city, state=state, sqft=sqft,
+        )
+
+        deal_color = "green" if result["is_deal_70"] else "yellow" if result["is_deal_65"] else "red"
+        deal_str   = (
+            "[bold green]✓ DEAL (70% rule)[/bold green]" if result["is_deal_70"]
+            else "[bold yellow]⚠ Deal at 65% only (tighter margin)[/bold yellow]" if result["is_deal_65"]
+            else f"[bold red]✗ NOT A DEAL — need ${result['below_mao_gap']:,.0f} price reduction[/bold red]"
+        )
+
+        console.print(Panel(
+            f"  {deal_str}\n\n"
+            f"  Purchase Price:  {currency(price)}\n"
+            f"  Your ARV:        {currency(arv)}\n"
+            f"  Repairs:         {currency(repairs)}\n"
+            f"  Spread:          [{'green' if result['spread'] > 0 else 'red'}]{currency(result['spread'])} "
+            f"({result['spread_pct']}% of ARV)[/{'green' if result['spread'] > 0 else 'red'}]\n\n"
+            f"  MAO at 70% rule: [bold cyan]{currency(result['mao_70_rule'])}[/bold cyan]  "
+            f"  MAO at 65%:      [cyan]{currency(result['mao_65_rule'])}[/cyan]\n"
+            + (f"\n  Market benchmark ({city}): ${result.get('market_ppsf',0)}/sqft → ARV est {currency(result.get('market_arv_estimate',0))}\n"
+               f"  {result.get('arv_market_note','')}" if result.get("market_ppsf") else ""),
+            title="[bold]QUICK COMP CHECK[/bold]",
+            border_style=deal_color,
+        ))
+
+        console.print("\n[bold]Pull real comps here to confirm:[/bold]")
+        for name, url in result.get("comp_sources", {}).items():
+            console.print(f"  • [bold]{name}:[/bold] {url}")
+
+    elif sub == "2":
+        console.print("\n[bold]Full Comp Validation[/bold]")
+        console.print("[dim]Enter 3-5 comparable sales you found on Redfin/Zillow. "
+                      "We'll adjust for differences and validate your ARV.[/dim]\n")
+
+        your_arv = FloatPrompt.ask("Your ARV estimate")
+        sub_beds = IntPrompt.ask("Subject property bedrooms", default=3)
+        sub_baths = FloatPrompt.ask("Subject bathrooms", default=1.5)
+        sub_sqft = FloatPrompt.ask("Subject sqft", default=1200)
+        sub_cond = Prompt.ask("Subject condition", choices=["excellent","good","average","below","poor"], default="average")
+
+        comps = []
+        console.print("\n[dim]Enter comparable sales (press Enter on address to finish):[/dim]\n")
+        while len(comps) < 7:
+            idx = len(comps) + 1
+            addr = Prompt.ask(f"Comp #{idx} address (Enter to finish)", default="")
+            if not addr:
+                break
+            price = FloatPrompt.ask(f"  Sale price")
+            beds  = IntPrompt.ask(f"  Beds", default=sub_beds)
+            baths = FloatPrompt.ask(f"  Baths", default=sub_baths)
+            sqft  = FloatPrompt.ask(f"  Sqft", default=sub_sqft)
+            cond  = Prompt.ask(f"  Condition", choices=["excellent","good","average","below","poor"], default="good")
+            comps.append({"address": addr, "price": price, "beds": beds, "baths": baths, "sqft": sqft, "condition": cond})
+
+        if not comps:
+            console.print("[yellow]No comps entered — can't validate.[/yellow]")
+            press_enter()
+            return
+
+        result = validate_arv(
+            your_arv=your_arv, comps=comps,
+            subject_beds=sub_beds, subject_baths=sub_baths,
+            subject_sqft=sub_sqft, subject_condition=sub_cond,
+        )
+
+        color = result["confidence_color"]
+        console.print(Panel(
+            f"  [{color}][bold]{result['confidence']}[/bold][/{color}]\n\n"
+            f"  Your ARV:             {currency(result['your_arv'])}\n"
+            f"  Comp Average (adj.):  [bold]{currency(result['avg_comp_arv'])}[/bold]\n"
+            f"  Comp Low:             {currency(result['low_comp_arv'])}\n"
+            f"  Comp High:            {currency(result['high_comp_arv'])}\n"
+            f"  Variance:             {result['variance_pct']}% off comps\n"
+            f"  Comps used:           {result['comp_count']}\n\n"
+            f"  [italic]{result['bias_note']}[/italic]\n\n"
+            f"  [bold]Recommendation:[/bold] {result['recommendation']}",
+            title="[bold]ARV VALIDATION[/bold]",
+            border_style=color,
+        ))
+
+    elif sub == "3":
+        console.print("\n[bold green]── WHERE TO PULL COMPS (FREE) ──[/bold green]\n")
+        for name, info in FREE_COMP_SOURCES.items():
+            console.print(f"  [bold cyan]{name}[/bold cyan]  [dim]{info.get('reliability','')[:50]}[/dim]")
+            console.print(f"    How: {info['how'][:90]}")
+            console.print(f"    Best for: {info['use_for']}")
+            if info.get("url"):
+                console.print(f"    [dim]{info['url']}[/dim]")
+            console.print()
 
     press_enter()
 
