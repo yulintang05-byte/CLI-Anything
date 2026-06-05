@@ -75,7 +75,7 @@ from modules.lender_directory import (
 )
 from modules.tenant_screener  import (
     SCREENING_QUESTIONS, SCREENING_SERVICES, SECTION8_SCREENING,
-    VASH_SCREENING, score_tenant,
+    VASH_SCREENING, score_tenant, rent_qualification,
 )
 from modules.luxury_wholesale import (
     LUXURY_MARKETS, LUXURY_DEAL_SOURCES, LUXURY_DEVELOPER_BUYERS,
@@ -459,6 +459,33 @@ def display_full_deal_card(data: dict, address: str = "", badge: str = ""):
         f"  {data['best_reason']}",
         title="[bold green]YOUR POSITION[/bold green]",
         border_style="green",
+    ))
+
+    # ── Auto tenant pre-screen (fires on any rental deal) ───────────────
+    _show_prescreen(data.get("market_rent", 0), sec8.get("fmr_est", 0))
+
+
+def _show_prescreen(market_rent: float, fmr: float = 0):
+    """Instant tenant-qualification bar for a rental deal. Uses LIVE rent +
+    LIVE FMR so the numbers are never stale. Shown on every deal card."""
+    q = rent_qualification(market_rent, section8_fmr=fmr)
+    if not q.get("applicable"):
+        return
+    s8_line = ""
+    if q.get("section8"):
+        s8 = q["section8"]
+        col = "green" if s8.get("covers_market_rent") else "yellow"
+        s8_line = f"\n  [bold {col}]Section 8:[/bold {col}] {s8['note']}"
+    console.print(Panel(
+        f"  To fill at [green]{currency(q['monthly_rent'])}/mo[/green], a tenant needs:\n"
+        f"  Income (3× rent): [bold yellow]{currency(q['income_needed_3x'])}/mo[/bold yellow]"
+        f"   │  Deposit: {currency(q['security_deposit'])}"
+        f"   │  Move-in cash: {currency(q['cash_to_move_in'])}\n"
+        f"  [dim]Ideal:[/dim] {q['ideal_tenant']}"
+        f"{s8_line}\n"
+        f"  [dim]Fastest fill: {q['fastest_fill'][0]}; require 3× income proof up front.[/dim]",
+        title="[bold cyan]🧍 TENANT PRE-SCREEN (auto)[/bold cyan]",
+        border_style="cyan",
     ))
 
 
@@ -2867,6 +2894,10 @@ def _of_analyze():
         title="[bold]VERDICT[/bold]",
     ))
 
+    # If it's a rental, auto-screen who can fill it
+    if rent and rent > 0:
+        _show_prescreen(rent)
+
 
 def _of_pitch():
     p = NEGOTIATION_PITCH
@@ -2904,10 +2935,18 @@ def menu_tenant_screener():
         "  [2] Section 8 screening checklist\n"
         "  [3] VASH (Veterans) screening guide\n"
         "  [4] Full-service screening providers\n"
+        "  [5] Rent qualification bar (who can fill this rent?)\n"
         "  [0] Back\n"
     )
-    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
     if sub == "0":
+        return
+
+    if sub == "5":
+        rent = FloatPrompt.ask("Monthly rent (use the live deal's rent)")
+        fmr  = FloatPrompt.ask("HUD FMR for the area (0 if unknown)", default=0)
+        _show_prescreen(rent, fmr)
+        press_enter()
         return
 
     if sub == "1":

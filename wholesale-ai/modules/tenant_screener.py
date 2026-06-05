@@ -88,6 +88,59 @@ VASH_SCREENING = {
 }
 
 
+def rent_qualification(rent_amount: float, section8_fmr: float = 0) -> dict:
+    """
+    Turn a live rent figure into an instant tenant-qualification bar.
+    Runs automatically on any rental deal so you know — the moment a house
+    pops — exactly who can fill it and how. No stale numbers: feed it the
+    live RentCast rent and (optionally) the live HUD FMR.
+    """
+    if rent_amount <= 0:
+        return {"applicable": False, "reason": "No rent — flip/wholesale exit, not a rental"}
+
+    income_3x   = rent_amount * 3
+    income_25x  = rent_amount * 2.5
+    deposit     = rent_amount            # standard 1 month
+    move_in     = rent_amount * 2        # first + deposit
+
+    # Section 8 angle: if HUD's FMR meets/exceeds market rent, the voucher
+    # covers it AND the government pays you directly — lowest-risk tenant.
+    s8 = {}
+    if section8_fmr > 0:
+        covers = section8_fmr >= rent_amount
+        s8 = {
+            "fmr": round(section8_fmr, 0),
+            "covers_market_rent": covers,
+            "note": (
+                f"HUD FMR ${section8_fmr:,.0f} {'covers' if covers else 'is below'} "
+                f"your ${rent_amount:,.0f} rent — "
+                + ("list it Section 8: gov pays you directly, near-zero vacancy."
+                   if covers else
+                   "set rent at/below FMR to qualify for the voucher pool.")
+            ),
+        }
+
+    return {
+        "applicable":        True,
+        "monthly_rent":      round(rent_amount, 0),
+        "income_needed_3x":  round(income_3x, 0),
+        "income_needed_2_5x": round(income_25x, 0),
+        "security_deposit":  round(deposit, 0),
+        "cash_to_move_in":   round(move_in, 0),
+        "ideal_tenant": (
+            f"Earns ${income_3x:,.0f}+/mo (3× rent), no evictions, 650+ credit, "
+            f"1-yr lease. Or a Section 8 voucher holder for guaranteed gov rent."
+        ),
+        "section8":          s8,
+        "fastest_fill": [
+            "List on GoSection8.com + Zillow Rentals same day",
+            "Require 3× income proof + photo ID up front (filters tire-kickers)",
+            "Run TurboTenant/Avail screening — tenant pays, free to you",
+            "For guaranteed rent: target a voucher holder (HUD pays you directly)",
+        ],
+    }
+
+
 def score_tenant(answers: dict, rent_amount: float) -> dict:
     """
     Score a tenant applicant on 0–100 scale.
