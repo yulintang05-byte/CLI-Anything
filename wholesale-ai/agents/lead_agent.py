@@ -20,6 +20,7 @@ from modules.web_scraper import (
     get_tax_deed_listings, get_hud_listings_url,
     score_raw_lead, CRAIGSLIST_CITIES,
 )
+from modules import rentcast
 from modules.deal_browser import all_strategies_analysis, HOT_MARKETS
 
 # Deep-reasoning model for self-improvement / pattern learning (Opus)
@@ -73,6 +74,23 @@ class LeadAgent:
         all_raw  = []
         new_leads = 0
         high_margin = 0
+
+        # ── Source 0: RentCast LIVE listings (the real feed) ──────────
+        # When a RENTCAST_API_KEY is set, this returns actual for-sale
+        # houses with real prices, beds/baths, sqft, and days-on-market.
+        # This is the source that lets Alberto "only sign."
+        if rentcast.has_api_key():
+            for market_str in markets:
+                parts = market_str.split()
+                if not parts:
+                    continue
+                city  = " ".join(parts[:-1]) if len(parts) > 1 else parts[0]
+                state = parts[-1] if len(parts) > 1 else ""
+                live = rentcast.search_sale_listings(
+                    city=city, state=state, max_price=max_price, limit=50,
+                )
+                all_raw.extend(live)
+            log_activity(self.name, "rentcast_pull", f"{len(all_raw)} live listings")
 
         # ── Source 1: Craigslist FSBO ─────────────────────────────────
         for market_str in markets:
@@ -157,13 +175,21 @@ class LeadAgent:
         state = lead.get("state", "MI")
         arv_mult = self.patterns.get("min_arv_multiple", 6.0)
 
-        hot_market = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
-        if hot_market:
-            arv  = hot_market["avg_price"] * 8
-            rent = hot_market["avg_rent"]
+        # Prefer REAL RentCast AVM data over any estimate.
+        if rentcast.has_api_key() and lead.get("source", "").startswith("RentCast"):
+            lead = rentcast.enrich_with_avm(lead)
+
+        if lead.get("arv_real"):
+            arv = lead["arv_real"]
         else:
-            arv  = price * arv_mult
-            rent = 950
+            hot_market = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
+            arv = hot_market["avg_price"] * 8 if hot_market else price * arv_mult
+
+        if lead.get("rent_real"):
+            rent = lead["rent_real"]
+        else:
+            hot_market = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
+            rent = hot_market["avg_rent"] if hot_market else 950
 
         try:
             credit = self.profile.get("credit_score", 730)

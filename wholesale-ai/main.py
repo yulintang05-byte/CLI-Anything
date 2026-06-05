@@ -2034,8 +2034,29 @@ def menu_tax_insurance():
 # ── 23. Live Lead Finder ─────────────────────────────────────────────────────
 
 def menu_live_leads():
-    section("LIVE LEAD FINDER — SCRAPE & SCORE NOW")
-    console.print("[dim]Scans Craigslist FSBO, Detroit Land Bank, tax deed sites, and HUD HomeStore right now.[/dim]\n")
+    section("LIVE LEAD FINDER — FIND & SCORE DEALS NOW")
+    console.print("[dim]Pulls ALL for-sale listings (RentCast live feed) + Craigslist FSBO, "
+                  "Land Bank, tax deed, and HUD. Scores every house for a $10-15k spread.[/dim]\n")
+
+    # Show data-source status so you always know if you're on REAL or sample data
+    from modules import rentcast
+    diag = rentcast.diagnose()
+    if diag["ok"]:
+        console.print(Panel(
+            f"[bold green]LIVE DATA CONNECTED[/bold green] — RentCast feed active.\n"
+            f"Agents will pull real for-sale listings with real ARV + rent.",
+            border_style="green", title="Data Source",
+        ))
+    else:
+        fix = diag.get("fix", "")
+        console.print(Panel(
+            f"[yellow]Sample/link mode[/yellow] — no live listings feed.\n"
+            f"Reason: [bold]{diag['reason']}[/bold]\n"
+            f"Fix: {fix}\n"
+            f"[dim]Get a free key at https://app.rentcast.io, then add "
+            f"RENTCAST_API_KEY to your .env[/dim]",
+            border_style="yellow", title="Data Source",
+        ))
 
     profile = load_profile()
     target_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
