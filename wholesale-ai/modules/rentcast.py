@@ -100,6 +100,10 @@ def search_sale_listings(
         addr = item.get("formattedAddress") or item.get("addressLine1") or "Unknown address"
         dom = item.get("daysOnMarket")
         signals = _signals_from_listing(item)
+        # Keep any free-text the listing exposes so downstream filters
+        # (owner-finance keyword scan, etc.) can read the real remarks.
+        raw_text = " ".join(str(item.get(f, "")) for f in
+                            ("listingType", "description", "remarks", "publicRemarks")).strip()
 
         leads.append({
             "title":            addr,
@@ -121,6 +125,7 @@ def search_sale_listings(
             "lat":              item.get("latitude"),
             "lng":              item.get("longitude"),
             "address_for_avm":  item.get("formattedAddress") or addr,
+            "raw_text":         raw_text,
             "distress_signals": signals,
         })
     return leads
@@ -151,6 +156,83 @@ def _signals_from_listing(item: dict) -> list:
             signals.append(kw)
 
     return signals
+
+
+# ── Owner-finance candidate search ──────────────────────────────────────────────
+
+_OWNER_FINANCE_KEYWORDS = [
+    "owner financing", "owner finance", "seller financing", "seller finance",
+    "owner will carry", "owc", "will carry", "contract for deed",
+    "rent to own", "rent-to-own", "lease to own", "lease option",
+    "no bank", "no banks", "terms available", "flexible terms",
+]
+
+
+def search_owner_finance(
+    city: str = "", state: str = "", zip_code: str = "",
+    max_price: int = 0, limit: int = 100,
+) -> list:
+    """
+    Pull listings and surface owner-finance candidates two ways:
+      1. Explicit keyword hit ("owner financing" in the remarks) — high confidence
+      2. Free & clear / long-DOM signals — likely-to-carry candidates
+
+    Returns the leads sorted with explicit owner-finance hits first.
+    Each lead gets 'owner_finance_signal' and 'owner_finance_confidence'.
+    """
+    leads = search_sale_listings(
+        city=city, state=state, zip_code=zip_code,
+        max_price=max_price, limit=limit,
+    )
+    scored = []
+    for lead in leads:
+        blob = (f"{lead.get('raw_text','')} {lead.get('description','')} "
+                f"{' '.join(lead.get('distress_signals', []))}").lower()
+        hits = [kw for kw in _OWNER_FINANCE_KEYWORDS if kw in blob]
+        dom = lead.get("days_on_market") or 0
+
+        if hits:
+            lead["owner_finance_signal"] = f"Listing says: {hits[0]}"
+            lead["owner_finance_confidence"] = "high"
+            rank = 0
+        elif dom >= 90:
+            lead["owner_finance_signal"] = f"On market {dom} days — owner may be open to carrying"
+            lead["owner_finance_confidence"] = "medium"
+            rank = 1
+        else:
+            lead["owner_finance_signal"] = "Worth asking — every seller is a maybe"
+            lead["owner_finance_confidence"] = "low"
+            rank = 2
+        scored.append((rank, lead))
+
+    scored.sort(key=lambda x: x[0])
+    return [l for _, l in scored]
+
+
+# ── Luxury / developer-wholesale search ─────────────────────────────────────────
+
+def search_luxury(
+    city: str = "", state: str = "", zip_code: str = "",
+    min_price: int = 500000, max_price: int = 0, limit: int = 100,
+) -> list:
+    """
+    High-end for-sale listings for developer/luxury wholesale ($500k+ default).
+    Same lead shape; flags days-on-market so you can spot stale luxury inventory
+    (the ones developers will negotiate hardest on).
+    """
+    leads = search_sale_listings(
+        city=city, state=state, zip_code=zip_code,
+        min_price=min_price, max_price=max_price, limit=limit,
+    )
+    for lead in leads:
+        dom = lead.get("days_on_market") or 0
+        if dom >= 120:
+            lead["luxury_note"] = f"Stale — {dom} days on market, developer leverage"
+        elif dom >= 60:
+            lead["luxury_note"] = f"{dom} days on market"
+        else:
+            lead["luxury_note"] = "Fresh listing"
+    return leads
 
 
 # ── AVM: real ARV + real rent ───────────────────────────────────────────────────

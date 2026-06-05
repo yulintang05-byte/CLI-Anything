@@ -154,6 +154,30 @@ def section(title: str):
     console.print()
 
 
+def data_source_banner(what: str = "real for-sale listings with real ARV + rent"):
+    """Show whether the live RentCast feed is connected. Reused by every
+    lane (live leads, owner finance, luxury) so the user always knows if
+    they're on REAL data or sample/link mode."""
+    from modules import rentcast
+    diag = rentcast.diagnose()
+    if diag["ok"]:
+        console.print(Panel(
+            f"[bold green]LIVE DATA CONNECTED[/bold green] — RentCast feed active.\n"
+            f"Agents will pull {what}.",
+            border_style="green", title="Data Source",
+        ))
+    else:
+        console.print(Panel(
+            f"[yellow]Sample/link mode[/yellow] — no live listings feed.\n"
+            f"Reason: [bold]{diag['reason']}[/bold]\n"
+            f"Fix: {diag.get('fix','')}\n"
+            f"[dim]Free key at https://app.rentcast.io/app/api → add "
+            f"RENTCAST_API_KEY to your .env[/dim]",
+            border_style="yellow", title="Data Source",
+        ))
+    return diag["ok"]
+
+
 # ── Menus ────────────────────────────────────────────────────────────────────
 
 def main_menu():
@@ -2039,24 +2063,7 @@ def menu_live_leads():
                   "Land Bank, tax deed, and HUD. Scores every house for a $10-15k spread.[/dim]\n")
 
     # Show data-source status so you always know if you're on REAL or sample data
-    from modules import rentcast
-    diag = rentcast.diagnose()
-    if diag["ok"]:
-        console.print(Panel(
-            f"[bold green]LIVE DATA CONNECTED[/bold green] — RentCast feed active.\n"
-            f"Agents will pull real for-sale listings with real ARV + rent.",
-            border_style="green", title="Data Source",
-        ))
-    else:
-        fix = diag.get("fix", "")
-        console.print(Panel(
-            f"[yellow]Sample/link mode[/yellow] — no live listings feed.\n"
-            f"Reason: [bold]{diag['reason']}[/bold]\n"
-            f"Fix: {fix}\n"
-            f"[dim]Get a free key at https://app.rentcast.io, then add "
-            f"RENTCAST_API_KEY to your .env[/dim]",
-            border_style="yellow", title="Data Source",
-        ))
+    data_source_banner()
 
     profile = load_profile()
     target_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
@@ -2140,10 +2147,16 @@ def menu_luxury():
         "  [1] Browse Luxury Markets & Sources\n"
         "  [2] Analyze a Luxury Deal\n"
         "  [3] Find Developer Buyers\n"
+        "  [4] [bold]PULL LIVE luxury listings now ($500k+)[/bold]\n"
         "  [0] Back\n"
     )
-    sub = Prompt.ask("Select", choices=["0","1","2","3"], default="1")
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
     if sub == "0":
+        return
+
+    if sub == "4":
+        _luxury_live()
+        press_enter()
         return
 
     if sub == "1":
@@ -2221,6 +2234,55 @@ def menu_luxury():
                 console.print(Panel(Markdown(ai_result), title=f"[bold cyan]Developers in {market}[/bold cyan]", border_style="cyan"))
 
     press_enter()
+
+
+def _luxury_live():
+    """Pull live high-end listings for developer wholesale."""
+    from modules import rentcast
+    console.print()
+    if not data_source_banner("luxury listings ($500k+) for developer wholesale"):
+        console.print("\n[dim]Set the key and come back — this will pull real luxury inventory.[/dim]")
+        return
+
+    market    = Prompt.ask("Luxury market (City ST)", default="Miami FL")
+    parts     = market.split()
+    city      = " ".join(parts[:-1]) if len(parts) > 1 else market
+    state     = parts[-1] if len(parts) > 1 else ""
+    min_price = IntPrompt.ask("Min price", default=500000)
+    max_price = IntPrompt.ask("Max price (0 = no cap)", default=0)
+
+    console.print("\n[bold green]Scanning live luxury listings...[/bold green]\n")
+    leads = rentcast.search_luxury(
+        city=city, state=state, min_price=min_price, max_price=max_price, limit=100,
+    )
+
+    if not leads:
+        console.print("[yellow]No luxury listings returned. Try another market or lower the min price.[/yellow]")
+        return
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED,
+              title=f"[bold green]LUXURY LISTINGS — {market}[/bold green]")
+    t.add_column("Address", max_width=38)
+    t.add_column("Price", justify="right")
+    t.add_column("Beds", justify="right")
+    t.add_column("SqFt", justify="right")
+    t.add_column("Status", max_width=34)
+    for lead in leads[:20]:
+        note = lead.get("luxury_note", "")
+        nc = "green" if "Stale" in note else "yellow" if "days" in note else "dim"
+        t.add_row(
+            lead.get("title", "")[:38],
+            currency(lead.get("price", 0)),
+            str(lead.get("bedrooms", "?")),
+            f"{lead.get('sqft') or '?'}",
+            f"[{nc}]{note}[/{nc}]",
+        )
+    console.print(t)
+    stale = [l for l in leads if "Stale" in l.get("luxury_note", "")]
+    console.print(f"\n[bold]{len(leads)} luxury listings[/bold] · "
+                  f"[green]{len(stale)} stale (best developer leverage)[/green]")
+    console.print("[dim]Run option 2 to analyze any one with the 65% ARV rule, "
+                  "then option 3 to find the developer buyers.[/dim]")
 
 
 # ── 25. Lender Directory ──────────────────────────────────────────────────────
@@ -2668,9 +2730,10 @@ def menu_owner_finance():
         "  [2] Seller motivation signals — who will carry the note\n"
         "  [3] Analyze a low-entry deal (down, monthly, cash flow)\n"
         "  [4] The pitch — how to ASK for owner financing\n"
+        "  [5] [bold]PULL LIVE owner-finance candidates now[/bold]\n"
         "  [0] Back\n"
     )
-    sub = Prompt.ask("Select", choices=["0", "1", "2", "3", "4"], default="3")
+    sub = Prompt.ask("Select", choices=["0", "1", "2", "3", "4", "5"], default="5")
     if sub == "0":
         return
 
@@ -2682,8 +2745,57 @@ def menu_owner_finance():
         _of_analyze()
     elif sub == "4":
         _of_pitch()
+    elif sub == "5":
+        _of_live()
 
     press_enter()
+
+
+def _of_live():
+    """Pull live listings and rank owner-finance candidates."""
+    from modules import rentcast
+    console.print()
+    if not data_source_banner("owner-finance candidates from live listings"):
+        console.print("\n[dim]Set the key and come back — this will pull real houses.[/dim]")
+        return
+
+    profile = load_profile()
+    default_mkt = profile.get("target_markets", "Detroit MI").split(",")[0].strip()
+    market = Prompt.ask("Market (City ST)", default=default_mkt)
+    parts  = market.split()
+    city   = " ".join(parts[:-1]) if len(parts) > 1 else market
+    state  = parts[-1] if len(parts) > 1 else ""
+    max_price = IntPrompt.ask("Max price", default=120000)
+
+    console.print("\n[bold green]Scanning live listings for owner-finance candidates...[/bold green]\n")
+    leads = rentcast.search_owner_finance(city=city, state=state, max_price=max_price, limit=100)
+
+    if not leads:
+        console.print("[yellow]No listings returned. Try a different market or raise max price.[/yellow]")
+        return
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED,
+              title=f"[bold green]OWNER-FINANCE CANDIDATES — {market}[/bold green]")
+    t.add_column("Conf", justify="center")
+    t.add_column("Address", max_width=38)
+    t.add_column("Price", justify="right")
+    t.add_column("DOM", justify="right")
+    t.add_column("Signal", max_width=40)
+    conf_color = {"high": "green", "medium": "yellow", "low": "dim"}
+    for lead in leads[:20]:
+        c = lead.get("owner_finance_confidence", "low")
+        t.add_row(
+            f"[{conf_color[c]}]{c.upper()}[/{conf_color[c]}]",
+            lead.get("title", "")[:38],
+            currency(lead.get("price", 0)),
+            str(lead.get("days_on_market", "?")),
+            lead.get("owner_finance_signal", "")[:40],
+        )
+    console.print(t)
+    high = [l for l in leads if l.get("owner_finance_confidence") == "high"]
+    console.print(f"\n[bold green]{len(high)} explicit owner-finance listings[/bold green] "
+                  f"· [dim]{len(leads)} total candidates ranked[/dim]")
+    console.print("[dim]Tip: option 4 gives you the exact pitch to lock the note.[/dim]")
 
 
 def _of_sources():
