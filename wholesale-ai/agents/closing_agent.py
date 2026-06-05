@@ -70,7 +70,9 @@ class ClosingAgent:
         if strategy in ("Wholesale", "Flip"):
             return "assignment"
         elif strategy == "BRRRR" and price < 50000:
-            return "assignment"   # wholesale to yourself or cash buy
+            return "assignment"   # low-price tax-deed / self-wholesale
+        elif strategy == "BRRRR":
+            return "purchase_sale"   # buy to hold then refi
         elif "Subject-To" in strategy:
             return "subject_to"
         elif "Seller Finance" in strategy:
