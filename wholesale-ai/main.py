@@ -139,6 +139,13 @@ from modules.hml_trigger import (
     evaluate_brrrr_trigger, brrrr_scenarios, hml_trigger_summary,
     BRRRR_HML_TRIGGER,
 )
+from modules.elevenlabs_voice import (
+    has_api_key as voice_has_key,
+    generate_voicemail, generate_buyer_pitch_audio, list_available_voices,
+)
+from modules.obsidian_sync import (
+    export_deal_to_obsidian, export_pipeline_digest_to_obsidian, vault_status,
+)
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -702,11 +709,50 @@ EMAIL:
         Path(fname).write_text(content)
         console.print(f"[green]✓ Full package saved to {fname}[/green]")
 
+    # ── ElevenLabs voicemail audio ────────────────────────────────────────────
+    if voice_has_key():
+        console.print("\n[dim]Generating voicemail audio via ElevenLabs...[/dim]")
+        profile = load_profile()
+        phone   = profile.get("phone", "")
+        seller_type_key = detect_seller_type_from_lead({"days_on_market": 90})
+        vm_path = generate_voicemail(
+            property_address = address,
+            investor_name    = profile.get("name", "Alberto"),
+            investor_phone   = phone,
+            seller_type      = seller_type_key,
+            output_dir       = ".",
+        )
+        if vm_path:
+            console.print(f"[green]✓ Voicemail MP3:[/green] {vm_path}  [dim](play this when seller picks up)[/dim]")
+
+    # ── Obsidian vault export ─────────────────────────────────────────────────
+    vs = vault_status()
+    if vs["configured"]:
+        export_deal_to_obsidian(
+            deal_data   = {
+                "price":            price,
+                "arv":              arv,
+                "repair_estimate":  repairs,
+                "wholesale_spread": arv - price - repairs,
+                "city":             address.split(",")[1].strip() if "," in address else "",
+                "source":           "Close Package",
+            },
+            address     = address,
+            status      = "active",
+            sms_script  = scripts.get("sms", ""),
+            email_body  = scripts.get("email", {}).get("body", ""),
+        )
+
+    voices_line = "[green]✓ Voicemail audio generated (ElevenLabs)[/green]\n  " if voice_has_key() else ""
+    obsidian_line = "[green]✓ Deal note saved to Obsidian vault[/green]\n  " if vs["configured"] else ""
+
     console.print(Panel(
         f"  [bold green]✓ Pipeline entry created[/bold green]  ID: {deal_in_pipe['id']}\n"
         f"  [bold green]✓ Outreach scripts ready[/bold green]  (SMS → call → email)\n"
-        f"  [bold green]✓ Buyer match complete[/bold green]   (who to assign to)\n\n"
-        f"  [bold yellow]NEXT STEP:[/bold yellow] Send the SMS above to the seller NOW.\n"
+        f"  [bold green]✓ Buyer match complete[/bold green]   (who to assign to)\n"
+        + (f"  {voices_line}" if voice_has_key() else "")
+        + (f"  {obsidian_line}" if vs["configured"] else "")
+        + f"\n  [bold yellow]NEXT STEP:[/bold yellow] Send the SMS above to the seller NOW.\n"
         f"  When they respond: run negotiation script (option 26 → option 4)\n"
         f"  When they accept: generate contract (option 26 → option 5)",
         title="[bold green]⚡ PACKAGE COMPLETE — Alberto only signs[/bold green]",

@@ -41,6 +41,33 @@ KEYS = [
         "required_for": "HUD FMR lookups, accurate Section 8 numbers",
         "optional": True,
     },
+    {
+        "name": "ELEVENLABS_API_KEY",
+        "label": "ElevenLabs — voice outreach (voicemail MP3s + call audio)",
+        "where": "https://elevenlabs.io  →  Profile → API Key",
+        "cost": "Free tier = 10,000 chars/mo (~15 voicemails). Starter $5/mo.",
+        "starts": "",
+        "required_for": "Auto-generate voicemail audio for every deal",
+        "optional": True,
+    },
+    {
+        "name": "ELEVENLABS_VOICE_ID",
+        "label": "ElevenLabs Voice ID (which voice speaks your scripts)",
+        "where": "Leave blank for default (Adam — professional US male). Find IDs at elevenlabs.io/voice-library",
+        "cost": "N/A",
+        "starts": "",
+        "required_for": "ElevenLabs voice selection",
+        "optional": True,
+    },
+    {
+        "name": "OBSIDIAN_VAULT_PATH",
+        "label": "Obsidian vault path (deal notes auto-synced here)",
+        "where": "Open Obsidian → Settings → About → Vault path (e.g. /Users/alberto/Documents/Obsidian/Main)",
+        "cost": "FREE — Obsidian is free.",
+        "starts": "/",
+        "required_for": "Auto-export deal cards to your Obsidian vault",
+        "optional": True,
+    },
 ]
 
 
