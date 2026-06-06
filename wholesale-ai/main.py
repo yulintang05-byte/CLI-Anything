@@ -444,7 +444,7 @@ def menu_browse_deals():
     press_enter()
 
 
-def display_full_deal_card(data: dict, address: str = "", badge: str = ""):
+def display_full_deal_card(data: dict, address: str = "", badge: str = "", warning: str = ""):
     """
     Render a Tranchi.ai-style deal card with all 4 strategies pre-calculated.
     Shows Flip, BRRRR, DSCR, and Section 8 side by side on one screen.
@@ -467,6 +467,15 @@ def display_full_deal_card(data: dict, address: str = "", badge: str = ""):
         f"  │  Rent Est: [green]{currency(data['market_rent'])}/mo[/green]"
     )
     console.print(Panel(header, border_style="bright_white", title="[bold white]DEAL CARD[/bold white]"))
+
+    # Data-quality warning — fires when the AVM rent/value looked unreliable
+    # (e.g. land valued as a house). Always show it BEFORE the strategy math so
+    # Alberto never acts on a phantom number.
+    if warning:
+        console.print(Panel(
+            f"[bold yellow]⚠ VERIFY BEFORE YOU ACT[/bold yellow]\n{warning}",
+            border_style="yellow", title="[bold red]DATA CHECK[/bold red]",
+        ))
 
     # ── Strategy panels ──────────────────────────────────────────────────
     flip_color = "green" if flip["verdict"] in ("STRONG FLIP", "GOOD FLIP") else (
@@ -2395,6 +2404,7 @@ def menu_live_leads():
                 lead["full_analysis"],
                 address=lead.get("title", "")[:60],
                 badge=lead.get("source", ""),
+                warning=lead.get("data_warning", ""),
             )
             console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
             if Confirm.ask("  [bold green]⚡ Generate FULL CLOSE PACKAGE for this deal?[/bold green]", default=True):

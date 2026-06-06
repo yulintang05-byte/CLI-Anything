@@ -31,6 +31,30 @@ _DISTRESS_KEYWORDS = [
     "divorce", "relocation", "below market", "quick sale", "bring offers",
 ]
 
+# Property types that are NOT a rentable/flippable structure. Vacant lots,
+# land, and DLBA "infill" parcels have no house to rehab or rent — the AVM
+# invents a fake ARV + rent for them, which poisons the deal score. We drop
+# them at the source so they never reach the pipeline.
+_LAND_PROPERTY_TYPES = {
+    "land", "lot", "vacant land", "vacant lot", "vacantland",
+    "residential lot", "commercial land", "agricultural", "farm",
+}
+
+# Free-text phrases that betray a non-structure listing even when the
+# propertyType field is mislabeled (DLBA lots often come through as
+# "Single Family" with 0 sqft).
+_LAND_TEXT_FLAGS = [
+    "infill building", "infill lot", "buildable lot", "vacant lot",
+    "vacant land", "build your", "new construction loan",
+    "construction plans", "sold as a bundle", "lots totaling",
+    "land bank", "dlba", "side lot",
+]
+
+# A real rental can't yield more than this gross (annual rent / ARV).
+# Detroit's best cash-flow houses top out around 18-22%. Anything above
+# this is a broken AVM estimate (usually land valued as a house).
+MAX_REALISTIC_GROSS_YIELD = 0.25
+
 
 def has_api_key() -> bool:
     return bool(os.getenv("RENTCAST_API_KEY"))
@@ -97,6 +121,12 @@ def search_sale_listings(
         if min_price and price < min_price:
             continue
 
+        # Drop vacant land / lots / DLBA infill parcels — they have no
+        # structure to rehab, flip, or rent. Leaving them in produces
+        # phantom "deals" with invented ARV and rent.
+        if _is_non_structure(item):
+            continue
+
         addr = item.get("formattedAddress") or item.get("addressLine1") or "Unknown address"
         dom = item.get("daysOnMarket")
         signals = _signals_from_listing(item)
@@ -117,6 +147,7 @@ def search_sale_listings(
             "state":            item.get("state", state),
             "zip":              item.get("zipCode", zip_code),
             "source":           "RentCast (live)",
+            "property_type":    item.get("propertyType", ""),
             "bedrooms":         item.get("bedrooms"),
             "bathrooms":        item.get("bathrooms"),
             "sqft":             item.get("squareFootage"),
@@ -129,6 +160,36 @@ def search_sale_listings(
             "distress_signals": signals,
         })
     return leads
+
+
+def _is_non_structure(item: dict) -> bool:
+    """
+    True if this listing is vacant land / a lot / a non-rentable parcel
+    rather than an actual house or building.
+
+    Three independent checks (any one trips it):
+      1. propertyType explicitly says Land/Lot/Vacant/etc.
+      2. Free-text remarks describe an infill lot, land bank parcel, or
+         "build your own" (catches DLBA lots mislabeled as Single Family).
+      3. Structural signature of a lot: no bedrooms AND no living area.
+         (A real house always reports beds or sqft; a lot reports neither.)
+    """
+    ptype = str(item.get("propertyType", "")).strip().lower()
+    if ptype in _LAND_PROPERTY_TYPES or "land" in ptype or ptype == "lot":
+        return True
+
+    blob = " ".join(str(item.get(f, "")) for f in
+                    ("description", "remarks", "publicRemarks", "listingType")).lower()
+    if any(flag in blob for flag in _LAND_TEXT_FLAGS):
+        return True
+
+    beds = item.get("bedrooms") or 0
+    baths = item.get("bathrooms") or 0
+    sqft = item.get("squareFootage") or 0
+    if beds == 0 and baths == 0 and sqft == 0:
+        return True
+
+    return False
 
 
 def _signals_from_listing(item: dict) -> list:

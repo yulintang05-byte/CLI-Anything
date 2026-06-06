@@ -47,6 +47,36 @@ A $5,000 house that needs $20,000 and can rent for $950/mo IS a deal.
 Score leads 1-10. Only queue scores 7+.
 """
 
+# Text that betrays a vacant lot / land parcel in any lead, regardless of
+# which source it came from. Backstop for the RentCast source-level filter.
+_LAND_TEXT_FLAGS = [
+    "vacant lot", "vacant land", "infill", "buildable lot", "build your",
+    "land bank", "dlba", "side lot", "lots totaling", "sold as a bundle",
+    "new construction loan", "construction plans",
+]
+_LAND_TYPE_FLAGS = ("land", "lot", "vacant")
+
+
+def _looks_like_land(lead: dict) -> bool:
+    """True if a lead is a vacant lot / land parcel rather than a structure."""
+    ptype = str(lead.get("property_type", "")).strip().lower()
+    if ptype and any(f in ptype for f in _LAND_TYPE_FLAGS):
+        return True
+
+    blob = " ".join(str(lead.get(f, "")) for f in
+                    ("title", "description", "raw_text")).lower()
+    if any(flag in blob for flag in _LAND_TEXT_FLAGS):
+        return True
+
+    # No structure signature: zero beds AND baths AND sqft.
+    beds = lead.get("bedrooms") or 0
+    baths = lead.get("bathrooms") or 0
+    sqft = lead.get("sqft") or 0
+    if beds == 0 and baths == 0 and sqft == 0 and lead.get("source", "").startswith("RentCast"):
+        return True
+
+    return False
+
 
 class LeadAgent:
     def __init__(self, profile: Optional[dict] = None):
@@ -170,6 +200,16 @@ class LeadAgent:
         if price <= 0:
             return lead
 
+        # Backstop: if a vacant lot / land parcel slipped past the source
+        # filter (e.g. from a non-RentCast feed), refuse to analyze it. There's
+        # no structure to flip or rent — any ARV/rent would be fabricated.
+        if _looks_like_land(lead):
+            lead["status"]       = "skip_land"
+            lead["data_warning"] = "Vacant land / lot — no structure to rehab or rent"
+            lead["high_margin"]  = False
+            lead["score"]        = 0   # keep it out of the top-leads queue
+            return lead
+
         # Estimate ARV from hot market data
         city  = lead.get("city", "Detroit")
         state = lead.get("state", "MI")
@@ -190,6 +230,21 @@ class LeadAgent:
         else:
             hot_market = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
             rent = hot_market["avg_rent"] if hot_market else 950
+
+        # Sanity-check the AVM rent against ARV. A gross yield above ~25% is not
+        # a real Detroit rental — it's a broken estimate (almost always a lot
+        # valued as a house). Discard the bad rent, fall back to market rent,
+        # and tag the lead so it can never be marked HIGH MARGIN on bad data.
+        if arv and rent and (rent * 12 / arv) > rentcast.MAX_REALISTIC_GROSS_YIELD:
+            hot_market = next((m for m in HOT_MARKETS if m["city"].lower() == city.lower()), None)
+            fallback_rent = hot_market["avg_rent"] if hot_market else 950
+            lead["data_warning"] = (
+                f"AVM rent ${rent:,.0f}/mo implied a {rent*12/arv*100:.0f}% yield on "
+                f"${arv:,.0f} ARV — unrealistic. Reverted to market rent ${fallback_rent:,.0f}. "
+                f"Verify rent before offering."
+            )
+            lead.pop("rent_real", None)
+            rent = fallback_rent
 
         try:
             credit = self.profile.get("credit_score", 730)
