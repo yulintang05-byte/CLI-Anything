@@ -4328,25 +4328,23 @@ def menu_market_intelligence():
 
         t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
         t.add_column("Market", style="bold")
-        t.add_column("State")
         t.add_column("ARV 3BR", justify="right")
         t.add_column("Rent", justify="right")
         t.add_column("Yield", justify="right")
+        t.add_column("Apprec", justify="right")
         t.add_column("Strategy")
         t.add_column("Risk")
 
         for mkt in available:
-            stats = get_market_quick_stats(mkt)
-            if "error" in stats:
-                continue
             data = MARKET_DATA[mkt]
             yield_pct = round(data["avg_rent_3br"] * 12 / data["avg_arv_3br"] * 100, 1)
             risk_color = "green" if data["risk_level"] == "low" else "yellow" if data["risk_level"] == "medium" else "red"
             t.add_row(
-                mkt, data["state"],
+                mkt,
                 f"${data['avg_arv_3br']:,}",
                 f"${data['avg_rent_3br']:,}/mo",
                 f"{yield_pct}%",
+                f"{data['appreciation_1yr']}%",
                 data["best_strategy"],
                 f"[{risk_color}]{data['risk_level']}[/{risk_color}]",
             )

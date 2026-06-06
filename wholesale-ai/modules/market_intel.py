@@ -357,8 +357,14 @@ def WHOLESALE_MARKET_SCORE(market: str) -> dict:
     resolved = _resolve_market(market)
     if resolved is None:
         return {
+            "found": False,
             "error": f"Market '{market}' not found. Available: {', '.join(MARKET_DATA.keys())}",
+            "market": market,
             "overall_score": 0,
+            "best_strategy": "?",
+            "recommended_for": ["Wholesale", "Flip"],
+            "warnings": ["No data for this market — pull comps from Zillow/Redfin before investing"],
+            "verdict": f"Market '{market}' not in database. Research locally before committing.",
         }
 
     data = MARKET_DATA[resolved]
@@ -475,6 +481,21 @@ def WHOLESALE_MARKET_SCORE(market: str) -> dict:
     if data["rehab_cost_sqft"] >= 40:
         warnings.append(f"High rehab costs (${data['rehab_cost_sqft']}/sqft) — verify contractor bids carefully")
 
+    # --- Derived entry price range + typical wholesale fee (from ARV tier) ---
+    # Distressed entry runs ~5%-70% of ARV depending on condition/program.
+    entry_low  = max(1000, int(arv * 0.05 / 1000) * 1000)
+    entry_high = int(arv * 0.70 / 1000) * 1000
+    entry_price_range = f"${entry_low:,}–${entry_high:,}"
+    # Wholesale fee scales with ARV tier.
+    if arv <= 80_000:
+        fee_range = "$5,000–$15,000"
+    elif arv <= 200_000:
+        fee_range = "$8,000–$25,000"
+    elif arv <= 400_000:
+        fee_range = "$15,000–$40,000"
+    else:
+        fee_range = "$25,000–$100,000"
+
     # --- Verdict ---
     if overall_score >= 8:
         verdict = f"{resolved} is a top-tier wholesale/investment market — strong fundamentals across all metrics."
@@ -487,13 +508,16 @@ def WHOLESALE_MARKET_SCORE(market: str) -> dict:
 
     return {
         "market": resolved,
+        "found": True,
         "overall_score": overall_score,
         "entry_barrier": entry_barrier,
         "exit_speed": exit_speed,
         "rental_yield": rental_yield,
         "gross_yield_pct": round(gross_yield, 2),
+        "rental_yield_pct": round(gross_yield, 1),
         "appreciation_outlook": appreciation_outlook,
         "appreciation_rate_pct": appr,
+        "appreciation_1yr_pct": appr,
         "vacancy_rate_pct": vacancy,
         "cash_buyer_pct": cash_pct,
         "avg_arv_3br": arv,
@@ -502,6 +526,8 @@ def WHOLESALE_MARKET_SCORE(market: str) -> dict:
         "rehab_cost_sqft": data["rehab_cost_sqft"],
         "landlord_friendly": data["landlord_friendly"],
         "best_strategy": data["best_strategy"],
+        "entry_price_range": entry_price_range,
+        "typical_wholesale_fee": fee_range,
         "hot_zip_codes": data["hot_zip_codes"],
         "risk_level": data["risk_level"],
         "recommended_for": recommended_for,
