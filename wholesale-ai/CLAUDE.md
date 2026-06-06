@@ -109,7 +109,8 @@ export_deal_to_obsidian(deal_data, address)
 
 Files land in: `$OBSIDIAN_VAULT_PATH/Wholesale Deals/YYYY-MM/address.md`
 Alberto opens Obsidian and sees every deal in his vault automatically.
-Env var: `OBSIDIAN_VAULT_PATH` (e.g. `/Users/albertosoriano/Documents/Obsidian/Main`)
+Env var: `OBSIDIAN_VAULT_PATH` — Alberto's vault is at `~/obsidian-claude-pkm`
+Deal notes land at: `~/obsidian-claude-pkm/Wholesale Deals/YYYY-MM/Address.md`
 
 ---
 
