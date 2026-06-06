@@ -130,6 +130,15 @@ from modules.market_intel import (
     get_market_trends_report, get_best_markets_for_strategy,
     calc_market_appreciation, list_available_markets, get_market_quick_stats,
 )
+from modules.property_mgmt import (
+    get_pm_for_market, estimate_pm_cost, list_covered_markets,
+    FEE_BREAKDOWN, PM_VET_QUESTIONS, SECTION8_PM_TIPS,
+    NATIONAL_PM_COMPANIES,
+)
+from modules.hml_trigger import (
+    evaluate_brrrr_trigger, brrrr_scenarios, hml_trigger_summary,
+    BRRRR_HML_TRIGGER,
+)
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -296,7 +305,9 @@ def main_menu():
             "  [bold cyan][37][/bold cyan] Granular Rehab Estimator — Room-by-room breakdown + contractor tips\n"
             "  [bold cyan][38][/bold cyan] Title Company Finder + Closing Cost Calculator\n"
             "  [bold cyan][39][/bold cyan] [bold]Market Intelligence[/bold] — Score & compare 17 markets\n"
-            "  [bold cyan][40][/bold cyan] Appreciation Projector — Future value by market\n\n"
+            "  [bold cyan][40][/bold cyan] Appreciation Projector — Future value by market\n"
+            "  [bold cyan][41][/bold cyan] [bold]Property Management Finder[/bold] — Local + national PMs by market\n"
+            "  [bold cyan][42][/bold cyan] [bold]BRRRR HML Trigger[/bold] — Auto-match hard money lenders when deal qualifies\n\n"
 
             "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
@@ -310,7 +321,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -394,6 +405,10 @@ def main_menu():
             menu_market_intelligence()
         elif choice == "40":
             menu_appreciation_projector()
+        elif choice == "41":
+            menu_property_mgmt()
+        elif choice == "42":
+            menu_brrrr_hml()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -4420,6 +4435,243 @@ def menu_appreciation_projector():
             title="[bold cyan]MARKET COMPARISON[/bold cyan]",
             border_style="cyan",
         ))
+
+    press_enter()
+
+
+# ── 41. Property Management Finder ───────────────────────────────────────────
+
+def menu_property_mgmt():
+    section("PROPERTY MANAGEMENT FINDER")
+    console.print("[dim]Find local + national PMs for your target market, vet questions, fee breakdown.[/dim]\n")
+
+    markets = list_covered_markets()
+    console.print(f"[bold]Markets covered:[/bold] {', '.join(markets)}\n")
+
+    sub = Prompt.ask(
+        "What do you want to do?",
+        choices=["find", "fees", "vet", "section8", "national", "cost"],
+        default="find",
+    )
+
+    if sub == "find":
+        mkt = Prompt.ask("Which market?", default="Detroit")
+        result = get_pm_for_market(mkt)
+        if not result["found"]:
+            console.print(f"[yellow]No local data for {mkt}. Try: {', '.join(markets[:5])}[/yellow]")
+            press_enter()
+            return
+
+        section(f"PM OPTIONS — {result['market'].upper()}")
+
+        if result["local"]:
+            console.print("[bold green]LOCAL Property Managers:[/bold green]\n")
+            for pm in result["local"]:
+                console.print(Panel(
+                    f"  [bold]{pm['name']}[/bold]\n"
+                    f"  Fee:       {pm['fee']}\n"
+                    f"  Specialty: {pm['specialty']}\n"
+                    f"  Note:      [dim]{pm['note']}[/dim]\n"
+                    f"  Website:   [cyan]{pm['url']}[/cyan]",
+                    border_style="green",
+                ))
+
+        if result["national"]:
+            console.print("\n[bold cyan]NATIONAL chains with local presence:[/bold cyan]\n")
+            for pm in result["national"]:
+                mkt_str = ", ".join(pm["markets"]) if isinstance(pm["markets"], list) else pm["markets"]
+                console.print(Panel(
+                    f"  [bold]{pm['name']}[/bold]\n"
+                    f"  Fee:       {pm['fee_range']}\n"
+                    f"  Specialty: {pm['specialty']}\n"
+                    f"  Pro:       {pm['pro']}\n"
+                    f"  Note:      [dim]{pm['note']}[/dim]\n"
+                    f"  Website:   [cyan]{pm['url']}[/cyan]",
+                    border_style="cyan",
+                ))
+
+    elif sub == "cost":
+        rent = FloatPrompt.ask("Monthly rent estimate", default=1100.0)
+        pct_in = FloatPrompt.ask("PM fee % (e.g. 8)", default=8.0)
+        c = estimate_pm_cost(rent, pct_in / 100)
+        console.print(Panel(
+            f"  Monthly rent:          {currency(c['monthly_rent'])}\n"
+            f"  Monthly PM fee ({pct_in}%): {currency(c['monthly_mgmt'])}\n"
+            f"  Annual PM fees:        {currency(c['annual_mgmt'])}\n"
+            f"  Leasing fee (est):     {currency(c['leasing_fee'])}\n"
+            f"  Lease renewal fee:     {currency(c['renewal_fee'])}\n"
+            f"  [bold]Total annual PM cost:  {currency(c['annual_total_pm'])}[/bold]\n\n"
+            f"  Net annual after PM:   [bold green]{currency(c['net_annual'])}[/bold green]\n"
+            f"  Net monthly after PM:  [bold green]{currency(c['net_monthly'])}[/bold green]",
+            title="PM COST BREAKDOWN",
+            border_style="cyan",
+        ))
+
+    elif sub == "fees":
+        section("FEE STRUCTURE GUIDE")
+        for fee_type, data in FEE_BREAKDOWN.items():
+            console.print(Panel(
+                f"  Typical: {data['typical']}\n"
+                + (f"  [dim]{data.get('note','')}[/dim]" if data.get("note") else ""),
+                title=f"[bold]{fee_type.replace('_',' ').title()}[/bold]",
+                border_style="dim",
+            ))
+
+    elif sub == "vet":
+        section("VET YOUR PROPERTY MANAGER — 11 Questions")
+        console.print("[dim]Ask every one of these before signing a management agreement.[/dim]\n")
+        for i, q in enumerate(PM_VET_QUESTIONS, 1):
+            console.print(f"  [bold cyan][{i:2}][/bold cyan]  {q}")
+
+    elif sub == "section8":
+        section("SECTION 8 / VOUCHER PM TIPS")
+        for tip in SECTION8_PM_TIPS:
+            console.print(f"  [green]•[/green] {tip}")
+
+    elif sub == "national":
+        section("NATIONAL PM CHAINS — All Markets")
+        for pm in NATIONAL_PM_COMPANIES:
+            mkt_str = ", ".join(pm["markets"]) if isinstance(pm["markets"], list) else pm["markets"]
+            console.print(Panel(
+                f"  [bold]{pm['name']}[/bold]\n"
+                f"  Fee:      {pm['fee_range']}\n"
+                f"  Markets:  {mkt_str}\n"
+                f"  Min rent: ${pm['min_rent']}/mo\n"
+                f"  Specialty:{pm['specialty']}\n"
+                f"  Pro:      {pm['pro']}\n"
+                f"  Note:     [dim]{pm['note']}[/dim]\n"
+                f"  Website:  [cyan]{pm['url']}[/cyan]",
+                border_style="cyan",
+            ))
+
+    press_enter()
+
+
+# ── 42. BRRRR HML Auto-Trigger ────────────────────────────────────────────────
+
+def menu_brrrr_hml():
+    section("BRRRR — HARD MONEY LENDER AUTO-TRIGGER")
+    console.print(
+        "[dim]Enter your deal numbers. If it clears all thresholds, the system auto-matches\n"
+        "the top 3 hard money lenders and generates a pre-qual checklist.[/dim]\n"
+    )
+
+    sub = Prompt.ask(
+        "What do you want to do?",
+        choices=["evaluate", "scenarios", "thresholds"],
+        default="evaluate",
+    )
+
+    if sub == "thresholds":
+        t = BRRRR_HML_TRIGGER
+        console.print(Panel(
+            f"  Max purchase to ARV:    {t['max_purchase_to_arv']*100:.0f}%  (buy at ≤70 cents on the dollar)\n"
+            f"  Max rehab to ARV:       {t['max_rehab_to_arv']*100:.0f}%  (rehab ≤40% ARV)\n"
+            f"  Min equity after rehab: ${t['min_equity_after']:,.0f}\n"
+            f"  Min DSCR after refi:    {t['min_dscr_after_refi']:.2f}\n"
+            f"  Min ARV:                ${t['min_arv']:,.0f}  (HML floor)\n\n"
+            f"  Refi assumption:        75% ARV cash-out @ 7.5% / 30yr\n"
+            f"  Expense ratio:          45%  (taxes, ins, mgmt, repairs)\n"
+            f"  Vacancy assumption:     8%",
+            title="TRIGGER THRESHOLDS",
+            border_style="cyan",
+        ))
+        press_enter()
+        return
+
+    if sub == "scenarios":
+        arv   = FloatPrompt.ask("ARV (After Repair Value)", default=90000.0)
+        rent  = FloatPrompt.ask("Expected monthly rent", default=1050.0)
+        scens = brrrr_scenarios(arv, rent)
+        t = Table(title=f"BRRRR Scenarios — ARV ${arv:,.0f} | Rent ${rent:,.0f}/mo", box=box.SIMPLE)
+        t.add_column("Scenario",  style="bold")
+        t.add_column("Purchase",  justify="right")
+        t.add_column("Rehab",     justify="right")
+        t.add_column("Total In",  justify="right")
+        t.add_column("DSCR",      justify="right")
+        t.add_column("Equity",    justify="right")
+        t.add_column("Cash Flow", justify="right")
+        t.add_column("HML Fires?", justify="center")
+        for s in scens:
+            ok = "[bold green]YES[/bold green]" if s["triggered"] else "[red]NO[/red]"
+            t.add_row(
+                s["label"],
+                currency(s["purchase"]),
+                currency(s["rehab"]),
+                currency(s["total_in"]),
+                f"{s['dscr']:.2f}",
+                currency(s["equity"]),
+                f"{currency(s['cash_flow'])}/mo",
+                ok,
+            )
+        console.print(t)
+        press_enter()
+        return
+
+    # Evaluate a specific deal
+    purchase = FloatPrompt.ask("Purchase price", default=55000.0)
+    rehab    = FloatPrompt.ask("Estimated rehab cost", default=18000.0)
+    arv      = FloatPrompt.ask("ARV (After Repair Value)", default=90000.0)
+    rent     = FloatPrompt.ask("Expected monthly rent", default=1050.0)
+    credit   = IntPrompt.ask("Your credit score (approx)", default=680)
+    state    = Prompt.ask("State (2-letter, optional)", default="")
+
+    result = evaluate_brrrr_trigger(purchase, rehab, arv, rent, credit, state)
+    m = result["metrics"]
+
+    status_color = "green" if result["triggered"] else "red"
+    status_text  = "TRIGGERED — HML Match Found" if result["triggered"] else "NOT Triggered"
+
+    console.print(Panel(
+        f"  Purchase:           {currency(m['purchase_price'])}\n"
+        f"  Rehab:              {currency(m['estimated_rehab'])}\n"
+        f"  Total in:           {currency(m['total_in'])}\n"
+        f"  ARV:                {currency(m['arv'])}\n"
+        f"  Purchase / ARV:     {m['purchase_to_arv']}%\n"
+        f"  Rehab / ARV:        {m['rehab_to_arv']}%\n"
+        f"  Equity after:       {currency(m['equity_after'])}\n"
+        f"  Refi loan (75%):    {currency(m['refi_loan'])}\n"
+        f"  Refi payment/mo:    {currency(m['refi_payment_mo'])}\n"
+        f"  Effective rent:     {currency(m['effective_rent'])}\n"
+        f"  NOI/mo:             {currency(m['noi_monthly'])}\n"
+        f"  DSCR after refi:    [bold]{m['dscr_after_refi']:.2f}[/bold]\n"
+        f"  Monthly cash flow:  [bold]{currency(m['monthly_cash_flow'])}[/bold]\n"
+        f"  Cash at close:      {currency(m['cash_at_close'])}",
+        title=f"[bold {status_color}]{status_text}[/bold {status_color}]",
+        border_style=status_color,
+    ))
+
+    if not result["triggered"]:
+        console.print("\n[red bold]Trigger fails:[/red bold]")
+        for f in result["fails"]:
+            console.print(f"  [red]✗[/red] {f}")
+        console.print("\n[dim]Run [scenarios] option to find a purchase/rehab combo that works.[/dim]")
+        press_enter()
+        return
+
+    # Show matched lenders
+    if result["matched_lenders"]:
+        section("TOP MATCHED HARD MONEY LENDERS")
+        for i, lender in enumerate(result["matched_lenders"], 1):
+            console.print(Panel(
+                f"  [bold]{lender['name']}[/bold]\n"
+                f"  Rates:       {lender.get('rates','N/A')}\n"
+                f"  LTV:         {lender.get('ltv','N/A')}\n"
+                f"  Loan range:  {lender.get('loan_range','N/A')}\n"
+                f"  Close time:  {lender.get('close_time','N/A')}\n"
+                f"  Min credit:  {lender.get('min_credit','N/A')}\n"
+                f"  Pro:         {lender.get('pro','')}\n"
+                f"  Note:        [dim]{lender.get('note','')}[/dim]\n"
+                f"  Website:     [cyan]{lender.get('url','N/A')}[/cyan]",
+                title=f"#{i} Match",
+                border_style="green",
+            ))
+
+    # Pre-qual checklist
+    if result["pre_qual_checklist"]:
+        section("PRE-QUAL CHECKLIST — Gather Before Calling")
+        for i, item in enumerate(result["pre_qual_checklist"], 1):
+            console.print(f"  [cyan][ ][/cyan] {item}")
 
     press_enter()
 
