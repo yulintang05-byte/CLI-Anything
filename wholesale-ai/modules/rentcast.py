@@ -50,6 +50,21 @@ _LAND_TEXT_FLAGS = [
     "land bank", "dlba", "side lot",
 ]
 
+# Phrases/names that identify a Detroit Land Bank Authority listing.
+# These are real houses with beds/baths/sqft — not vacant lots — but DLBA
+# deeds include renovation-compliance clauses; you buy direct, you cannot
+# assign the contract. Flag as is_link_only so they're research links only.
+_DLBA_OWNERSHIP_FLAGS = [
+    "detroit land bank", "building detroit", "own it now",
+    "dlba", "land bank authority", "buildingdetroit",
+]
+# RentCast fields that may carry the listing agent / office / owner name
+_AGENT_FIELDS = (
+    "listingAgent", "listingAgentName", "agentName",
+    "listingOffice", "listingOfficeName", "officeName",
+    "ownerName", "sellerName",
+)
+
 # A real rental can't yield more than this gross (annual rent / ARV).
 # Detroit's best cash-flow houses top out around 18-22%. Anything above
 # this is a broken AVM estimate (usually land valued as a house).
@@ -133,9 +148,15 @@ def search_sale_listings(
         # Keep any free-text the listing exposes so downstream filters
         # (owner-finance keyword scan, etc.) can read the real remarks.
         raw_text = " ".join(str(item.get(f, "")) for f in
-                            ("listingType", "description", "remarks", "publicRemarks")).strip()
+                            ("listingType", "description", "remarks", "publicRemarks",
+                             "listingAgent", "listingOffice", "ownerName")).strip()
 
-        leads.append({
+        # DLBA-owned houses: real structure but deed bars assignment.
+        # Surface as a research link so the user can browse them, but
+        # never score them as a wholesale deal or generate outreach.
+        is_dlba = _is_land_bank_listing(item)
+
+        lead = {
             "title":            addr,
             "price":            float(price),
             "url":              f"https://www.rentcast.io/property/{item.get('id','')}",
@@ -158,7 +179,14 @@ def search_sale_listings(
             "address_for_avm":  item.get("formattedAddress") or addr,
             "raw_text":         raw_text,
             "distress_signals": signals,
-        })
+        }
+        if is_dlba:
+            lead["is_link_only"]   = True
+            lead["data_warning"]   = (
+                "Detroit Land Bank (DLBA) — buy direct at buildingdetroit.org. "
+                "Deed bars assignment; not wholesaleable."
+            )
+        leads.append(lead)
     return leads
 
 
@@ -190,6 +218,27 @@ def _is_non_structure(item: dict) -> bool:
         return True
 
     return False
+
+
+def _is_land_bank_listing(item: dict) -> bool:
+    """
+    True if this listing is owned/sold by the Detroit Land Bank Authority
+    (or any municipal land bank). These are real houses with beds/baths/sqft,
+    so they pass _is_non_structure, but they can't be wholesaled — DLBA deeds
+    require the buyer to renovate and pass inspection; assignment is barred.
+    """
+    # Check structured agent/office/owner fields first
+    for field in _AGENT_FIELDS:
+        val = str(item.get(field, "")).lower()
+        if val and any(flag in val for flag in _DLBA_OWNERSHIP_FLAGS):
+            return True
+
+    # Check every text field in the raw listing
+    blob = " ".join(str(item.get(f, "")) for f in (
+        "description", "remarks", "publicRemarks", "listingType",
+        "listingAgent", "listingOffice", "ownerName", "sellerName",
+    )).lower()
+    return any(flag in blob for flag in _DLBA_OWNERSHIP_FLAGS)
 
 
 def _signals_from_listing(item: dict) -> list:

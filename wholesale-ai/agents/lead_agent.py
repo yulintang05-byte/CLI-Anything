@@ -56,6 +56,14 @@ _LAND_TEXT_FLAGS = [
 ]
 _LAND_TYPE_FLAGS = ("land", "lot", "vacant")
 
+# Text that identifies a DLBA-owned house (real structure, but deed bars
+# assignment). Backstop for the RentCast source-level is_link_only flag —
+# catches any DLBA house that reaches enrichment from a non-RentCast source.
+_DLBA_TEXT_FLAGS = [
+    "detroit land bank", "building detroit", "own it now",
+    "dlba", "land bank authority", "buildingdetroit",
+]
+
 
 def _looks_like_land(lead: dict) -> bool:
     """True if a lead is a vacant lot / land parcel rather than a structure."""
@@ -76,6 +84,15 @@ def _looks_like_land(lead: dict) -> bool:
         return True
 
     return False
+
+
+def _is_dlba_house(lead: dict) -> bool:
+    """True if this real house is owned/sold by the Detroit Land Bank Authority."""
+    if lead.get("is_link_only") and "dlba" in str(lead.get("data_warning", "")).lower():
+        return True  # already flagged upstream by rentcast module
+    blob = " ".join(str(lead.get(f, "")) for f in
+                    ("title", "description", "raw_text", "source")).lower()
+    return any(flag in blob for flag in _DLBA_TEXT_FLAGS)
 
 
 class LeadAgent:
@@ -207,7 +224,20 @@ class LeadAgent:
             lead["status"]       = "skip_land"
             lead["data_warning"] = "Vacant land / lot — no structure to rehab or rent"
             lead["high_margin"]  = False
-            lead["score"]        = 0   # keep it out of the top-leads queue
+            lead["score"]        = 0
+            return lead
+
+        # Backstop: DLBA-owned houses have real structures but their deeds bar
+        # assignment. Surface as research link, never as a wholesale deal.
+        if _is_dlba_house(lead):
+            lead["status"]       = "link_only"
+            lead["is_link_only"] = True
+            lead["data_warning"] = (
+                "Detroit Land Bank (DLBA) — buy direct at buildingdetroit.org. "
+                "Deed bars assignment; not wholesaleable."
+            )
+            lead["high_margin"]  = False
+            lead["score"]        = 0
             return lead
 
         # Estimate ARV from hot market data
