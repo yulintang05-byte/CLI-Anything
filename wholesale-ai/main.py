@@ -111,6 +111,25 @@ from modules.comps import (
 from modules.daily_digest import (
     generate_morning_digest, get_last_digest, get_pipeline_health,
 )
+from modules.scheduler import (
+    load_scheduler_config, save_scheduler_config, get_next_run_time,
+    start_scheduler, stop_scheduler, is_scheduler_running, get_scheduler_status,
+    SchedulerConfig,
+)
+from modules.rehab_estimator import (
+    estimate_by_scope, estimate_room_by_room, estimate_flip_profit,
+    get_contractor_tips, get_rehab_checklist, SCOPE_LEVELS, ROOM_COSTS,
+)
+from modules.title_company import (
+    TITLE_COMPANIES, CLOSING_COSTS_BY_STATE, WHAT_TITLE_DOES,
+    INVESTOR_TITLE_TIPS, calc_closing_costs, get_title_companies_for_state,
+    get_hud1_settlement_guide, find_title_company_tips,
+)
+from modules.market_intel import (
+    MARKET_DATA, wholesale_market_score, get_market_comparison,
+    get_market_trends_report, get_best_markets_for_strategy,
+    calc_market_appreciation, list_available_markets, get_market_quick_stats,
+)
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -272,6 +291,13 @@ def main_menu():
             "  [bold cyan][34][/bold cyan] Outreach Script Generator (SMS, call, email, door knock)\n"
             "  [bold cyan][35][/bold cyan] Comp Validator — Is your ARV right?\n\n"
 
+            "  [bold green]── AUTOMATION & INTELLIGENCE ────────────────────────────────[/bold green]\n"
+            "  [bold cyan][36][/bold cyan] [bold]Auto-Scheduler[/bold] — Daily 6am scan runs itself, no babysitting\n"
+            "  [bold cyan][37][/bold cyan] Granular Rehab Estimator — Room-by-room breakdown + contractor tips\n"
+            "  [bold cyan][38][/bold cyan] Title Company Finder + Closing Cost Calculator\n"
+            "  [bold cyan][39][/bold cyan] [bold]Market Intelligence[/bold] — Score & compare 17 markets\n"
+            "  [bold cyan][40][/bold cyan] Appreciation Projector — Future value by market\n\n"
+
             "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
             "  [bold cyan][17][/bold cyan] Wholesale Strategy Guide\n"
@@ -284,7 +310,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -358,6 +384,16 @@ def main_menu():
             menu_outreach_scripts()
         elif choice == "35":
             menu_comp_validator()
+        elif choice == "36":
+            menu_scheduler()
+        elif choice == "37":
+            menu_rehab_estimator()
+        elif choice == "38":
+            menu_title_company()
+        elif choice == "39":
+            menu_market_intelligence()
+        elif choice == "40":
+            menu_appreciation_projector()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -3770,6 +3806,622 @@ def menu_comp_validator():
             if info.get("url"):
                 console.print(f"    [dim]{info['url']}[/dim]")
             console.print()
+
+    press_enter()
+
+
+# ── 36. Auto-Scheduler ───────────────────────────────────────────────────────
+
+def menu_scheduler():
+    section("AUTO-SCHEDULER — DAILY SCAN RUNS ITSELF")
+    console.print(
+        "[dim]Set it once. Every morning at 6am (or every N hours) the agents scan "
+        "for deals, score everything, and save your morning digest automatically. "
+        "You wake up to a briefing — no babysitting required.[/dim]\n"
+    )
+
+    status = get_scheduler_status()
+    running_str = "[bold green]● RUNNING[/bold green]" if status["running"] else "[dim]○ Idle[/dim]"
+    next_run_str = status.get("next_run", "Not scheduled")
+    last_run_str = status.get("last_run", "Never")
+    last_summary = status.get("last_scan_summary", {})
+
+    console.print(Panel(
+        f"  Status:     {running_str}\n"
+        f"  Next Run:   [cyan]{next_run_str}[/cyan]\n"
+        f"  Last Run:   [dim]{last_run_str}[/dim]\n"
+        + (
+            f"  Last Scan:  [green]{last_summary.get('new_leads', 0)} leads found · "
+            f"{last_summary.get('high_margin', 0)} HIGH MARGIN[/green]"
+            if last_summary else ""
+        ),
+        title="[bold green]SCHEDULER STATUS[/bold green]",
+        border_style="green" if status["running"] else "dim",
+    ))
+
+    console.print(
+        "\n  [1] Start scheduler (daily or interval)\n"
+        "  [2] Stop scheduler\n"
+        "  [3] Run scan RIGHT NOW (manual trigger)\n"
+        "  [4] View last scan results\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        if status["running"]:
+            console.print("[yellow]Scheduler already running.[/yellow]")
+            press_enter()
+            return
+
+        mode = Prompt.ask("Run mode", choices=["daily", "interval"], default="daily")
+        profile = load_profile()
+        default_markets = profile.get("target_markets", "Detroit MI, Birmingham AL, Memphis TN")
+        markets_input = Prompt.ask("Markets to scan", default=default_markets)
+        markets = [m.strip() for m in markets_input.split(",")]
+        max_price = IntPrompt.ask("Max price filter", default=80000)
+
+        if mode == "daily":
+            run_time = Prompt.ask("Run time (24hr, e.g. 06:00)", default="06:00")
+            cfg = SchedulerConfig(run_time=run_time, interval_hours=None,
+                                  markets=markets, max_price=max_price, enabled=True)
+        else:
+            hours = IntPrompt.ask("Run every N hours", default=12)
+            cfg = SchedulerConfig(run_time="06:00", interval_hours=hours,
+                                  markets=markets, max_price=max_price, enabled=True)
+
+        save_scheduler_config(cfg)
+        msg = start_scheduler(cfg)
+        console.print(f"\n[bold green]✓ {msg}[/bold green]")
+        console.print("[dim]Agents will run automatically. Check Morning Digest (option 33) for results.[/dim]")
+
+    elif sub == "2":
+        if not status["running"]:
+            console.print("[dim]Scheduler not running.[/dim]")
+        else:
+            msg = stop_scheduler()
+            console.print(f"\n[yellow]{msg}[/yellow]")
+
+    elif sub == "3":
+        profile = load_profile()
+        markets_input = Prompt.ask(
+            "Markets", default=profile.get("target_markets", "Detroit MI, Birmingham AL")
+        )
+        markets = [m.strip() for m in markets_input.split(",")]
+        max_price = IntPrompt.ask("Max price", default=80000)
+        console.print("\n[bold green]Running scan now...[/bold green]")
+
+        runner = get_runner()
+        with console.status("[bold green]Finding and scoring deals...[/bold green]"):
+            result = runner.run_full_pipeline(markets=markets, max_price=max_price, console=None)
+
+        ready  = result.get("ready_for_review", [])
+        lr     = result.get("lead_result", {})
+        console.print(Panel(
+            f"  Leads Found:  [cyan]{lr.get('new_leads', 0)}[/cyan]\n"
+            f"  High Margin:  [bold green]{len(ready)} deals[/bold green]\n"
+            f"  Analyzed:     [cyan]{len(result.get('analyzed_leads', []))}[/cyan]\n\n"
+            + (f"  [bold green]⭐ TOP DEAL: {ready[0].get('title','')[:55]}[/bold green]" if ready else "  [dim]No HIGH MARGIN deals this scan[/dim]"),
+            title="[bold green]SCAN COMPLETE[/bold green]",
+            border_style="green",
+        ))
+
+        if ready:
+            if Confirm.ask("\nView top deal?", default=True):
+                lead = ready[0]
+                if lead.get("full_analysis"):
+                    display_full_deal_card(lead["full_analysis"],
+                                           address=lead.get("title",""), badge="AGENT FOUND")
+
+    elif sub == "4":
+        last = get_scheduler_status().get("last_scan_summary", {})
+        if not last:
+            console.print("[yellow]No scan results saved yet. Run a scan first.[/yellow]")
+        else:
+            console.print(Panel(
+                "\n".join(f"  {k}: {v}" for k, v in last.items()),
+                title="[bold cyan]LAST SCAN RESULTS[/bold cyan]",
+                border_style="cyan",
+            ))
+
+    press_enter()
+
+
+# ── 37. Granular Rehab Estimator ──────────────────────────────────────────────
+
+def menu_rehab_estimator():
+    section("GRANULAR REHAB ESTIMATOR")
+    console.print(
+        "[dim]Know exactly what rehab costs BEFORE you make an offer. "
+        "Scoping it wrong by $10k kills your profit margin.[/dim]\n"
+    )
+
+    console.print(
+        "  [1] Quick estimate by scope (cosmetic / medium / heavy / gut)\n"
+        "  [2] Room-by-room breakdown (most accurate)\n"
+        "  [3] Flip profit sanity check (repairs → net profit)\n"
+        "  [4] Contractor tips (how to avoid getting burned)\n"
+        "  [5] Rehab sequence checklist (what order to do work)\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        console.print("\n[bold]Quick Scope Estimate[/bold]\n")
+        sqft = FloatPrompt.ask("Square footage", default=1200)
+        scope = Prompt.ask("Scope", choices=list(SCOPE_LEVELS.keys()), default="medium")
+        region = Prompt.ask(
+            "Region (affects labor costs)",
+            choices=["midwest", "south", "southeast", "northeast", "west"],
+            default="midwest",
+        )
+        beds  = IntPrompt.ask("Bedrooms", default=3)
+        baths = IntPrompt.ask("Bathrooms", default=1)
+
+        r = estimate_by_scope(sqft, scope, region, beds, baths)
+
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED,
+                  title=f"[bold green]REHAB ESTIMATE — {scope.upper()}[/bold green]")
+        t.add_column("Line Item", style="bold")
+        t.add_column("Low", justify="right")
+        t.add_column("Mid", justify="right")
+        t.add_column("High", justify="right")
+
+        for item in r.get("line_items", []):
+            t.add_row(
+                item.get("item", ""),
+                currency(item.get("low", 0)),
+                currency(item.get("mid", 0)),
+                currency(item.get("high", 0)),
+            )
+
+        t.add_row(
+            "[bold]TOTAL[/bold]",
+            f"[bold green]{currency(r['total_low'])}[/bold green]",
+            f"[bold yellow]{currency(r['total_mid'])}[/bold yellow]",
+            f"[bold red]{currency(r['total_high'])}[/bold red]",
+        )
+        console.print(t)
+
+        console.print(f"\n[bold]Scope:[/bold] {SCOPE_LEVELS.get(scope, scope)}")
+        if r.get("recommendations"):
+            console.print("\n[bold yellow]Recommendations:[/bold yellow]")
+            for rec in r["recommendations"][:5]:
+                console.print(f"  • {rec}")
+
+        console.print(f"\n[dim]Use MID estimate in your MAO calc. Add 10-15% contingency buffer.[/dim]")
+
+    elif sub == "2":
+        console.print("\n[bold]Room-by-Room Breakdown[/bold]\n")
+        console.print("[dim]Include each system/room you need to address:[/dim]\n")
+
+        rooms = {}
+        room_list = [
+            ("roof", "Roof (need replacement?)", "bool"),
+            ("foundation", "Foundation issues?", "bool"),
+            ("hvac", "HVAC (full replace?)", "bool"),
+            ("electrical", "Electrical rewire?", "bool"),
+            ("plumbing", "Plumbing (full)?", "bool"),
+            ("kitchen", "Kitchen upgrade?", "bool"),
+            ("bathrooms", "Bathrooms (how many to rehab?)", "int"),
+            ("flooring", "New flooring throughout?", "bool"),
+            ("paint_interior", "Interior paint?", "bool"),
+            ("paint_exterior", "Exterior paint?", "bool"),
+            ("windows", "How many windows to replace?", "int"),
+        ]
+
+        sqft = FloatPrompt.ask("Property square footage", default=1200)
+        region = Prompt.ask("Region", choices=["midwest","south","southeast","northeast","west"], default="midwest")
+
+        for key, label, rtype in room_list:
+            if rtype == "bool":
+                rooms[key] = {"include": Confirm.ask(f"  {label}", default=False), "sqft": sqft}
+            else:
+                n = IntPrompt.ask(f"  {label} (0 = skip)", default=0)
+                rooms[key] = {"include": n > 0, "count": n, "sqft": sqft}
+
+        r = estimate_room_by_room(rooms)
+
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+        t.add_column("Item", style="bold")
+        t.add_column("Low", justify="right")
+        t.add_column("Mid", justify="right")
+        t.add_column("High", justify="right")
+        for item in r.get("line_items", []):
+            t.add_row(item["item"], currency(item["low"]), currency(item["mid"]), currency(item["high"]))
+        t.add_row("[bold]TOTAL[/bold]",
+                  f"[bold green]{currency(r['total_low'])}[/bold green]",
+                  f"[bold yellow]{currency(r['total_mid'])}[/bold yellow]",
+                  f"[bold red]{currency(r['total_high'])}[/bold red]")
+        console.print(t)
+
+    elif sub == "3":
+        console.print("\n[bold]Flip Profit Calculator[/bold]\n")
+        purchase = FloatPrompt.ask("Purchase price")
+        arv      = FloatPrompt.ask("ARV (after repair value)")
+        repairs  = FloatPrompt.ask("Repair estimate (mid range)")
+        fee      = FloatPrompt.ask("Wholesale fee if assigning (0 if flipping yourself)", default=0)
+        months   = IntPrompt.ask("Holding months (flip timeline)", default=4)
+
+        r = estimate_flip_profit(purchase, arv, repairs, fee, months)
+
+        net_color = "green" if r["net_profit"] > 0 else "red"
+        deal_str = "[bold green]✓ DEAL[/bold green]" if r["is_deal"] else "[bold red]✗ NOT A DEAL[/bold red]"
+
+        console.print(Panel(
+            f"  Purchase:         {currency(r['purchase'])}\n"
+            f"  Repairs:          {currency(r['repairs'])}\n"
+            f"  Holding Costs:    {currency(r['holding_costs'])}\n"
+            f"  Closing Costs:    {currency(r['closing_costs'])}\n"
+            f"  ARV:              {currency(r['arv'])}\n"
+            f"  ─────────────────────────────────\n"
+            f"  Gross Profit:     {currency(r.get('gross_profit', 0))}\n"
+            f"  Wholesale Fee:    {currency(r['wholesale_fee'])}\n"
+            f"  [bold]NET PROFIT:       [{net_color}]{currency(r['net_profit'])}[/{net_color}][/bold]\n"
+            f"  ROI:              [{net_color}]{r['roi_pct']}%[/{net_color}]\n\n"
+            f"  {deal_str}",
+            title="[bold yellow]FLIP PROFIT ANALYSIS[/bold yellow]",
+            border_style=net_color,
+        ))
+
+    elif sub == "4":
+        tips = get_contractor_tips()
+        console.print("\n[bold yellow]CONTRACTOR TIPS — HOW NOT TO GET BURNED[/bold yellow]\n")
+        for tip in tips:
+            console.print(f"  [green]•[/green] {tip}")
+
+    elif sub == "5":
+        scope = Prompt.ask("Scope", choices=list(SCOPE_LEVELS.keys()), default="medium")
+        checklist = get_rehab_checklist(scope)
+        console.print(f"\n[bold cyan]REHAB SEQUENCE — {scope.upper()}[/bold cyan]\n")
+        console.print("[dim]Do work in this order. Doing it backwards costs 30%+ more.[/dim]\n")
+        for item in checklist:
+            console.print(f"  {item}")
+
+    press_enter()
+
+
+# ── 38. Title Company Finder ──────────────────────────────────────────────────
+
+def menu_title_company():
+    section("TITLE COMPANY FINDER + CLOSING COSTS")
+    console.print(
+        "[dim]Find investor-friendly title companies in your market. "
+        "Calculate exact closing costs before you make an offer — "
+        "not knowing this eats your profit.[/dim]\n"
+    )
+
+    console.print(
+        "  [1] Find title companies for my state\n"
+        "  [2] Calculate closing costs (assignment vs double close)\n"
+        "  [3] What does title insurance do?\n"
+        "  [4] HUD-1 / Closing Disclosure guide\n"
+        "  [5] Investor title tips\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        state = Prompt.ask("State abbreviation (e.g. MI, TX, FL)", default="MI").upper()
+        companies = get_title_companies_for_state(state)
+
+        console.print(f"\n[bold green]Title Companies for {state}:[/bold green]\n")
+        for c in companies:
+            name = c.get("name", c.get("Name",""))
+            ctype = c.get("type", "")
+            website = c.get("website", "")
+            notes   = c.get("notes", "")
+            states  = ", ".join(c.get("states_strong", [])[:5])
+            color = "green" if "national" in ctype else "cyan"
+            console.print(f"  [bold {color}]{name}[/bold {color}]  [dim]({ctype})[/dim]")
+            console.print(f"    {website}")
+            console.print(f"    [dim]{notes[:100]}[/dim]")
+            console.print(f"    Strong in: {states}\n")
+
+        state_data = CLOSING_COSTS_BY_STATE.get(state)
+        if state_data:
+            atty = "[yellow]YES — Attorney required by law[/yellow]" if state_data.get("attorney_required") else "[green]No — title company handles it[/green]"
+            console.print(Panel(
+                f"  Typical total closing cost: [bold yellow]{state_data.get('typical_total_pct', 0.02)*100:.1f}%[/bold yellow]\n"
+                f"  Attorney required: {atty}\n"
+                f"  [dim]{state_data.get('notes', '')}[/dim]",
+                title=f"[bold]{state} CLOSING NOTES[/bold]",
+                border_style="cyan",
+            ))
+
+        console.print("\n[bold yellow]HOW TO FIND ONE LOCALLY:[/bold yellow]")
+        for tip in find_title_company_tips()[:5]:
+            console.print(f"  • {tip}")
+
+    elif sub == "2":
+        console.print("\n[bold]Closing Cost Calculator[/bold]\n")
+        price = FloatPrompt.ask("Purchase / assignment price")
+        state = Prompt.ask("State", default="MI").upper()
+        w_fee = FloatPrompt.ask("Wholesale fee (0 if keeping deal)", default=10000)
+        tx_type = Prompt.ask("Transaction type", choices=["assignment", "double_close"], default="assignment")
+        is_assign = tx_type == "assignment"
+
+        r = calc_closing_costs(price, state, is_assignment=is_assign, wholesale_fee=w_fee)
+
+        lines = [f"  Transaction Type: [bold]{r['transaction_type']}[/bold]\n"]
+        for k, v in r.items():
+            if k in ("transaction_type", "notes"):
+                continue
+            if isinstance(v, (int, float)) and v > 0:
+                lines.append(f"  {k.replace('_',' ').title()}: {currency(v)}")
+
+        lines.append(f"\n  [bold]TOTAL CLOSING COSTS: [yellow]{currency(r['total_closing_costs'])}[/yellow][/bold]")
+        lines.append(f"  [dim]{r['notes']}[/dim]")
+
+        console.print(Panel("\n".join(lines), title="[bold yellow]CLOSING COST BREAKDOWN[/bold yellow]", border_style="yellow"))
+
+        if is_assign:
+            console.print(
+                f"\n[green]Assignment Net = Fee ${w_fee:,.0f} − Closing ${r['total_closing_costs']:,.0f} "
+                f"= [bold]${w_fee - r['total_closing_costs']:,.0f} to you[/bold][/green]"
+            )
+
+    elif sub == "3":
+        console.print("\n[bold cyan]WHAT TITLE INSURANCE DOES[/bold cyan]\n")
+        for item in WHAT_TITLE_DOES:
+            console.print(f"  [green]•[/green] {item}")
+
+    elif sub == "4":
+        guide = get_hud1_settlement_guide()
+        console.print(f"\n[bold cyan]HUD-1 / CLOSING DISCLOSURE GUIDE[/bold cyan]\n")
+        console.print(f"[bold]What is it?[/bold] {guide['what_is_it']}\n")
+        for section_name, desc in guide["key_sections"].items():
+            console.print(f"  [bold yellow]{section_name}[/bold yellow]")
+            console.print(f"    {desc}")
+        console.print(f"\n[bold green]Pro Tip:[/bold green] {guide['pro_tip']}")
+        console.print(f"[bold cyan]Wholesaler Tip:[/bold cyan] {guide['wholesaler_tip']}")
+
+    elif sub == "5":
+        console.print("\n[bold yellow]INVESTOR TITLE TIPS[/bold yellow]\n")
+        for tip in INVESTOR_TITLE_TIPS:
+            console.print(f"  [green]•[/green] {tip}")
+
+    press_enter()
+
+
+# ── 39. Market Intelligence ───────────────────────────────────────────────────
+
+def menu_market_intelligence():
+    section("MARKET INTELLIGENCE — SCORE & COMPARE MARKETS")
+    console.print(
+        "[dim]Data on 17 wholesale markets: appreciation, vacancy, cash buyer %, "
+        "rental yield, entry price, best strategy. Know where the money is.[/dim]\n"
+    )
+
+    console.print(
+        "  [1] Score a specific market (full analysis)\n"
+        "  [2] Compare multiple markets side by side\n"
+        "  [3] Best markets by strategy (BRRRR, Flip, Section 8, etc.)\n"
+        "  [4] National trends report (2025)\n"
+        "  [5] Browse all 17 markets (quick stats)\n"
+        "  [0] Back\n"
+    )
+    sub = Prompt.ask("Select", choices=["0","1","2","3","4","5"], default="1")
+    if sub == "0":
+        return
+
+    if sub == "1":
+        available = list_available_markets()
+        console.print(f"[dim]Available: {', '.join(available[:10])}... ({len(available)} total)[/dim]\n")
+        market = Prompt.ask("Market name (e.g. Detroit, Memphis, Atlanta)", default="Detroit")
+        score  = wholesale_market_score(market)
+
+        if not score.get("found"):
+            console.print(f"[yellow]{score['verdict']}[/yellow]")
+            press_enter()
+            return
+
+        s = score["overall_score"]
+        s_color = "green" if s >= 7 else "yellow" if s >= 5 else "red"
+        ll_str = "[green]YES — landlord-friendly[/green]" if score["landlord_friendly"] else "[red]NO — tenant-friendly (harder evictions)[/red]"
+
+        console.print(Panel(
+            f"  [bold]Overall Score:[/bold]  [{s_color}]{s}/10[/{s_color}]\n"
+            f"  Best Strategy:    [bold cyan]{score['best_strategy']}[/bold cyan]\n"
+            f"  Entry Barrier:    [bold]{score['entry_barrier']}[/bold]  ({score.get('entry_price_range','')})\n"
+            f"  Exit Speed:       {score['exit_speed']}\n\n"
+            f"  Rental Yield:     [green]{score['rental_yield_pct']}%/yr[/green]\n"
+            f"  Appreciation:     [green]{score['appreciation_1yr_pct']}%/yr[/green]\n"
+            f"  Vacancy Rate:     {'[red]' if score['vacancy_rate_pct'] > 10 else '[green]'}{score['vacancy_rate_pct']}%[/{'red' if score['vacancy_rate_pct'] > 10 else 'green'}]\n"
+            f"  Cash Buyers:      {score['cash_buyer_pct']}% of sales\n"
+            f"  Landlord Laws:    {ll_str}\n\n"
+            f"  Hot Zip Codes:    [dim]{', '.join(score['hot_zip_codes'])}[/dim]\n"
+            f"  Typical Fee:      [yellow]{score.get('typical_wholesale_fee','?')}[/yellow]\n\n"
+            f"  [italic]{score['notes']}[/italic]\n\n"
+            f"  [bold]VERDICT:[/bold] {score['verdict']}",
+            title=f"[bold green]MARKET SCORE — {market.upper()}[/bold green]",
+            border_style=s_color,
+        ))
+
+        if score.get("warnings"):
+            console.print("\n[bold red]Warnings:[/bold red]")
+            for w in score["warnings"]:
+                console.print(f"  [red]⚠[/red] {w}")
+
+    elif sub == "2":
+        markets_input = Prompt.ask(
+            "Markets to compare (comma-separated)",
+            default="Detroit, Birmingham, Memphis, Indianapolis, Kansas City",
+        )
+        markets = [m.strip() for m in markets_input.split(",") if m.strip()]
+
+        results = get_market_comparison(markets)
+
+        t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED,
+                  title="[bold green]MARKET COMPARISON[/bold green]")
+        t.add_column("Rank", justify="center", width=5)
+        t.add_column("Market", style="bold")
+        t.add_column("Score", justify="center")
+        t.add_column("Strategy")
+        t.add_column("Yield", justify="right")
+        t.add_column("Entry")
+        t.add_column("Vacancy", justify="right")
+        t.add_column("Risk")
+
+        for i, r in enumerate(results, 1):
+            s = r["overall_score"]
+            s_color = "green" if s >= 7 else "yellow" if s >= 5 else "red"
+            rank_str = f"#{i}" + (" ⭐" if i == 1 else "")
+            t.add_row(
+                rank_str,
+                r["market"],
+                f"[{s_color}]{s}[/{s_color}]",
+                r.get("best_strategy", "?"),
+                f"{r.get('rental_yield_pct', 0)}%",
+                r.get("entry_barrier", "?"),
+                f"{r.get('vacancy_rate_pct', 0)}%",
+                r.get("risk_level", "?") if r.get("found") else "N/A",
+            )
+        console.print(t)
+
+    elif sub == "3":
+        strategy = Prompt.ask(
+            "Strategy",
+            choices=["Wholesale", "BRRRR", "Flip", "Section 8", "Luxury"],
+            default="BRRRR",
+        )
+        results = get_best_markets_for_strategy(strategy)
+
+        console.print(f"\n[bold green]TOP MARKETS FOR {strategy.upper()}:[/bold green]\n")
+        for i, r in enumerate(results, 1):
+            s = r["overall_score"]
+            s_color = "green" if s >= 7 else "yellow" if s >= 5 else "red"
+            console.print(
+                f"  [bold]#{i}: {r['market']}[/bold] [{s_color}]{s}/10[/{s_color}] — "
+                f"{r.get('best_strategy','')} | Entry: {r.get('entry_barrier','')} | "
+                f"Yield: {r.get('rental_yield_pct',0)}%"
+            )
+            console.print(f"     [dim]{r.get('notes','')}[/dim]\n")
+
+    elif sub == "4":
+        report = get_market_trends_report()
+        trends = report["trends"]
+
+        console.print(Panel(
+            f"  [bold]Interest Rates:[/bold] {trends['interest_rates']}\n"
+            f"  [bold]Investor Activity:[/bold] {trends['investor_activity']}\n"
+            f"  [bold]Rental Demand:[/bold] {trends['rental_demand']}\n\n"
+            f"  [bold yellow]🔥 HOT STRATEGIES 2025:[/bold yellow]\n"
+            + "\n".join(f"  • {s}" for s in trends["hot_strategies"]) + "\n\n"
+            f"  [bold red]Headwinds:[/bold red]\n"
+            + "\n".join(f"  • {h}" for h in trends.get("headwinds", [])) + "\n\n"
+            f"  [bold green]Top 5 Recommended Markets:[/bold green] "
+            + ", ".join(m["market"] for m in report["top_markets"]),
+            title="[bold green]NATIONAL MARKET TRENDS — 2025[/bold green]",
+            border_style="green",
+        ))
+
+    elif sub == "5":
+        available = list_available_markets()
+        console.print(f"\n[bold cyan]ALL {len(available)} MARKETS — QUICK STATS[/bold cyan]\n")
+
+        t = Table(show_header=True, header_style="bold cyan", box=box.SIMPLE)
+        t.add_column("Market", style="bold")
+        t.add_column("State")
+        t.add_column("ARV 3BR", justify="right")
+        t.add_column("Rent", justify="right")
+        t.add_column("Yield", justify="right")
+        t.add_column("Strategy")
+        t.add_column("Risk")
+
+        for mkt in available:
+            stats = get_market_quick_stats(mkt)
+            if "error" in stats:
+                continue
+            data = MARKET_DATA[mkt]
+            yield_pct = round(data["avg_rent_3br"] * 12 / data["avg_arv_3br"] * 100, 1)
+            risk_color = "green" if data["risk_level"] == "low" else "yellow" if data["risk_level"] == "medium" else "red"
+            t.add_row(
+                mkt, data["state"],
+                f"${data['avg_arv_3br']:,}",
+                f"${data['avg_rent_3br']:,}/mo",
+                f"{yield_pct}%",
+                data["best_strategy"],
+                f"[{risk_color}]{data['risk_level']}[/{risk_color}]",
+            )
+        console.print(t)
+
+    press_enter()
+
+
+# ── 40. Appreciation Projector ────────────────────────────────────────────────
+
+def menu_appreciation_projector():
+    section("APPRECIATION PROJECTOR — FUTURE VALUE BY MARKET")
+    console.print(
+        "[dim]See what a property is worth in 1, 3, 5, and 10 years "
+        "based on each market's actual appreciation rate. "
+        "Compounding appreciation is how buy-and-hold builds wealth.[/dim]\n"
+    )
+
+    available = list_available_markets()
+    console.print(f"[dim]Available markets: {', '.join(available[:8])}... (type any market name)[/dim]\n")
+
+    market   = Prompt.ask("Market", default="Detroit")
+    price    = FloatPrompt.ask("Current purchase price or ARV")
+    max_yrs  = IntPrompt.ask("Projection years", default=10)
+
+    result = calc_market_appreciation(price, max_yrs, market)
+    rate   = result["annual_appreciation_pct"]
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED,
+              title=f"[bold green]APPRECIATION PROJECTION — {market.upper()} ({rate}%/yr)[/bold green]")
+    t.add_column("Year", justify="center")
+    t.add_column("Projected Value", justify="right")
+    t.add_column("Total Gain", justify="right")
+    t.add_column("Total Return", justify="right")
+
+    for yr, val in result["projected_values"].items():
+        gain = val - price
+        ret  = (val - price) / price * 100
+        yr_color = "green" if yr >= 5 else "cyan" if yr >= 3 else "white"
+        t.add_row(
+            f"[{yr_color}]Year {yr}[/{yr_color}]",
+            f"[{yr_color}]{currency(val)}[/{yr_color}]",
+            f"[green]{currency(gain)}[/green]",
+            f"[green]{ret:.1f}%[/green]",
+        )
+    console.print(t)
+
+    final = result["final_value"]
+    total_gain = result["total_appreciation"]
+    console.print(Panel(
+        f"  Buy at:        {currency(price)}\n"
+        f"  In {max_yrs} years:   [bold green]{currency(final)}[/bold green]\n"
+        f"  Total gain:    [bold green]{currency(total_gain)}[/bold green]\n"
+        f"  Total return:  [bold green]{result['total_return_pct']}%[/bold green]\n\n"
+        f"  [dim]This is appreciation only — does not include rental income or equity from payments.[/dim]\n"
+        f"  [dim]Add rental cash flow and equity paydown for total wealth creation.[/dim]",
+        title="[bold green]WEALTH PROJECTION[/bold green]",
+        border_style="green",
+    ))
+
+    if Confirm.ask("\nCompare to another market?", default=False):
+        mkt2  = Prompt.ask("Second market", default="Indianapolis")
+        price2 = price
+        r2 = calc_market_appreciation(price2, max_yrs, mkt2)
+        rate2 = r2["annual_appreciation_pct"]
+        final2 = r2["final_value"]
+        winner = market if final > final2 else mkt2
+        console.print(Panel(
+            f"  {market} ({rate}%/yr):     {currency(final)} in {max_yrs} yrs\n"
+            f"  {mkt2} ({rate2}%/yr):  {currency(final2)} in {max_yrs} yrs\n\n"
+            f"  [bold green]Winner: {winner}[/bold green]  "
+            f"(+{currency(max(final, final2) - min(final, final2))} more)",
+            title="[bold cyan]MARKET COMPARISON[/bold cyan]",
+            border_style="cyan",
+        ))
 
     press_enter()
 
