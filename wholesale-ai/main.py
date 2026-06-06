@@ -620,10 +620,14 @@ def _one_click_close_package(lead: dict):
     analysis = lead.get("full_analysis", {})
     address  = lead.get("title", "Unknown")
     price    = lead.get("price", 0)
-    arv      = analysis.get("arv", price * 2)
+    arv      = analysis.get("arv", 0) or lead.get("arv", 0)
     repairs  = analysis.get("repairs", 0)
     strategy = analysis.get("best_strategy", "Wholesale")
-    mao_val  = analysis.get("flip", {}).get("mao", price)
+    mao_val  = analysis.get("flip", {}).get("mao", 0) or price
+
+    if not arv:
+        console.print("[yellow]⚠ No ARV data — run comp validator (35) before sending outreach.[/yellow]")
+        arv = price * 1.4
 
     # 1. Auto-detect seller type from lead signals
     seller_type = detect_seller_type_from_lead(lead)
@@ -753,7 +757,7 @@ EMAIL:
             seller_email      = seller_email,
             property_address  = address,
             email_subject     = email_data.get("subject", f"Quick question about {address}"),
-            email_body        = email_data.get("body", scripts.get("sms", "")),
+            email_body        = email_data.get("body", ""),
             investor_name     = inv_name,
             investor_email    = inv_email,
         )
@@ -947,11 +951,9 @@ def _calc_full_deal_card():
         notes = Prompt.ask("Notes", default=f"Best strategy: {data['best_strategy']}")
         add_deal(
             address=address or "Unknown address",
-            price=price,
+            asking_price=price,
             arv=arv,
             repairs=data["repairs"],
-            rent=rent,
-            strategy=data["best_strategy"],
             stage=stage,
             notes=notes,
         )

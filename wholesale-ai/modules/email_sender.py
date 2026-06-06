@@ -60,7 +60,10 @@ def _send_via_sendgrid(
 ) -> bool:
     try:
         import urllib.request, urllib.error, json
-        from_email = os.getenv("EMAIL_FROM", "noreply@wholesaleai.app")
+        from_email = os.getenv("EMAIL_FROM", "")
+        if not from_email:
+            print("  [email] EMAIL_FROM not set — add it to .env for correct sender address")
+            from_email = "noreply@wholesaleai.app"
         payload = {
             "personalizations": [{"to": [{"email": to_email}]}],
             "from": {"email": from_email, "name": from_name},

@@ -46,8 +46,9 @@ def analyze_deal(
     if not client:
         return "⚠️  ANTHROPIC_API_KEY not set. Add it to .env to unlock AI analysis.\n   Get a free key at: https://console.anthropic.com/"
 
-    mao = (arv * 0.70) - repairs
-    spread = arv - asking_price - repairs
+    wholesale_fee = 10_000
+    mao = (arv * 0.70) - repairs - wholesale_fee
+    spread = arv - asking_price - repairs - wholesale_fee
     is_deal = asking_price <= mao
 
     prompt = f"""Analyze this wholesale real estate deal and give me your honest assessment:
@@ -60,7 +61,7 @@ NUMBERS:
 - Seller Asking Price: ${asking_price:,.0f}
 - After Repair Value (ARV): ${arv:,.0f}
 - Estimated Repairs: ${repairs:,.0f}
-- Max Allowable Offer (MAO @ 70%): ${mao:,.0f}
+- Max Allowable Offer (MAO @ 70% − $10k fee): ${mao:,.0f}
 - Equity Spread: ${spread:,.0f}
 - Deal works at asking price: {"YES" if is_deal else "NO — needs ${:,.0f} price reduction".format(asking_price - mao)}
 
@@ -75,7 +76,7 @@ Please provide:
 6. **Negotiation Approach** — how to get to my number if seller is above MAO"""
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=1200,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -114,7 +115,7 @@ Write a full word-for-word script including:
 Use natural, conversational language. Mark where to pause and listen with [LISTEN]."""
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=1500,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -162,7 +163,7 @@ Write a complete, professional LOI that:
 Format it as an actual ready-to-use letter with today's date placeholder [DATE]."""
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=1200,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -205,7 +206,7 @@ Cover:
 Be specific with real numbers. Skip the theory — make it actionable."""
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=1000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -224,7 +225,7 @@ def ask_advisor(question: str, context: str = "") -> str:
         prompt = f"Context: {context}\n\nQuestion: {question}"
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=800,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -253,7 +254,7 @@ Include:
 Give me real tactics, not theory."""
 
     response = client.messages.create(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=900,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],

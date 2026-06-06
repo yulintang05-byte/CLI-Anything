@@ -65,9 +65,13 @@ def export_deal_to_obsidian(
         return None
 
     now   = datetime.now()
-    price = deal_data.get("purchase_price", deal_data.get("price", 0))
+    price = (deal_data.get("purchase_price")
+             or deal_data.get("asking_price")
+             or deal_data.get("price", 0))
     arv   = deal_data.get("arv", 0)
-    rehab = deal_data.get("repair_estimate", deal_data.get("estimated_rehab", 0))
+    rehab = (deal_data.get("repair_estimate")
+             or deal_data.get("estimated_rehab")
+             or deal_data.get("repairs", 0))
     spread = deal_data.get("wholesale_spread", arv - price - rehab if arv else 0)
     rent  = deal_data.get("monthly_rent", 0)
     city  = deal_data.get("city", "")

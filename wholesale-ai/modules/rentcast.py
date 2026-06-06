@@ -17,7 +17,7 @@ is unavailable: it returns an empty list / None and logs why, so the rest of
 the app keeps working on sample data instead of crashing.
 """
 import os
-from typing import Optional
+from typing import Optional, Union
 
 import httpx
 
@@ -75,7 +75,7 @@ def has_api_key() -> bool:
     return bool(os.getenv("RENTCAST_API_KEY"))
 
 
-def _get(path: str, params: dict) -> Optional[list | dict]:
+def _get(path: str, params: dict) -> Optional[Union[list, dict]]:
     """
     Authenticated GET against RentCast. Returns parsed JSON, or None on any
     failure (no key, network wall, rate limit, bad response).
