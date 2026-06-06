@@ -6,8 +6,9 @@ and call-ready audio so Alberto never has to read a script cold.
 
 Env vars:
   ELEVENLABS_API_KEY   — get at elevenlabs.io
-  ELEVENLABS_VOICE_ID  — default: Adam (professional US male)
+  ELEVENLABS_VOICE_ID  — default: Roger (professional US male, in Alberto's account)
                          Find IDs at: elevenlabs.io/voice-library
+                         Malformed/placeholder values are ignored automatically.
 
 Usage:
   from modules.elevenlabs_voice import speak_script, generate_voicemail
@@ -15,20 +16,38 @@ Usage:
 """
 
 import os
+import re
 import httpx
 from pathlib import Path
 from typing import Optional
 
 BASE_URL  = "https://api.elevenlabs.io/v1"
-DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"   # Adam — neutral US male, professional
+# Roger — confirmed present in Alberto's ElevenLabs account (21-voice library).
+# Adam (pNInz6obpgDQGcFmaJgB) is NOT in his account, so Roger is the safe default.
+DEFAULT_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"   # Roger — neutral US male, professional
+
+# A real ElevenLabs voice ID is a 20-char alphanumeric token.
+_VOICE_ID_RE = re.compile(r"^[A-Za-z0-9]{20}$")
 
 
 def has_api_key() -> bool:
     return bool(os.getenv("ELEVENLABS_API_KEY"))
 
 
+def _valid_voice_id() -> str:
+    """
+    Return a usable voice ID. Ignores malformed ELEVENLABS_VOICE_ID values
+    (placeholder text, parentheses, spaces, blanks) and falls back to default.
+    This is what stopped the 400 errors when .env held a placeholder string.
+    """
+    raw = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
+    if _VOICE_ID_RE.match(raw):
+        return raw
+    return DEFAULT_VOICE_ID
+
+
 def _voice_id() -> str:
-    return os.getenv("ELEVENLABS_VOICE_ID", DEFAULT_VOICE_ID)
+    return _valid_voice_id()
 
 
 def speak_script(
@@ -70,7 +89,14 @@ def speak_script(
         if r.status_code == 200:
             Path(output_path).write_bytes(r.content)
             return output_path
-        print(f"  [voice] ElevenLabs error {r.status_code}: {r.text[:120]}")
+        if r.status_code in (400, 422):
+            print(f"  [voice] ElevenLabs rejected the request ({r.status_code}). "
+                  f"Likely a bad ELEVENLABS_VOICE_ID — using default '{DEFAULT_VOICE_ID}' "
+                  f"should fix it. Detail: {r.text[:120]}")
+        elif r.status_code == 401:
+            print("  [voice] ElevenLabs 401 — API key invalid or out of credits.")
+        else:
+            print(f"  [voice] ElevenLabs error {r.status_code}: {r.text[:120]}")
         return None
     except Exception as e:
         print(f"  [voice] Network error: {e}")

@@ -80,7 +80,7 @@ speak_script(script_text, output_path="voicemail_3240_Glynn.mp3")
 ElevenLabs speaks the voicemail script in a professional male voice.
 Alberto plays the MP3 when the seller picks up, or drops it as a voicemail.
 Key env var: `ELEVENLABS_API_KEY`
-Voice ID env var: `ELEVENLABS_VOICE_ID` (default: Adam — professional US male)
+Voice ID env var: `ELEVENLABS_VOICE_ID` (default: Roger — in Alberto's account; malformed values auto-ignored)
 
 ---
 
