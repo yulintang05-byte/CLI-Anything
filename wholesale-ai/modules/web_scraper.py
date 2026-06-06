@@ -182,28 +182,40 @@ def get_hud_listings_url(state: str, max_price: int = 100000, bedrooms: int = 0)
 # ── Detroit Land Bank Authority ───────────────────────────────────────────────
 
 def get_dlba_listings() -> list:
-    """DLBA own-it-now and auction listings."""
+    """
+    DLBA own-it-now / auction / side-lot PORTALS.
+
+    These are entry points to the Land Bank's inventory, not specific
+    properties. They carry no real address, ARV, or rent — so they're flagged
+    is_link_only and price 0. That keeps them out of deal scoring/enrichment
+    (which would otherwise invent fake numbers and surface them as "deals").
+    Browse them as research links; each actual house must be analyzed on its
+    own address.
+    """
     return [
         {
-            "title":   "Detroit Land Bank — Own It Now (from $1,000)",
-            "price":   1000,
+            "title":   "Detroit Land Bank — Own It Now (browse from $1,000)",
+            "price":   0,
             "url":     "https://buildingdetroit.org/own-it-now/",
-            "description": "Own It Now properties — City of Detroit residential",
+            "description": "Own It Now portal — City of Detroit residential. Pick a specific address, then analyze it.",
             "city":    "Detroit", "state": "MI", "source": "Detroit DLBA",
+            "is_link_only": True,
         },
         {
             "title":   "Detroit Land Bank — Auction (bid from $1k)",
-            "price":   1000,
+            "price":   0,
             "url":     "https://buildingdetroit.org/auctions/",
-            "description": "Weekly auctions of Detroit properties",
+            "description": "Weekly auctions of Detroit properties. Auction terms, not assignable wholesale contracts.",
             "city":    "Detroit", "state": "MI", "source": "Detroit DLBA",
+            "is_link_only": True,
         },
         {
-            "title":   "Detroit Land Bank — Side Lots",
-            "price":   100,
+            "title":   "Detroit Land Bank — Side Lots (vacant land)",
+            "price":   0,
             "url":     "https://buildingdetroit.org/side-lots/",
-            "description": "Purchase vacant land adjacent to your property",
+            "description": "Vacant land adjacent to your property — not a structure to flip or rent.",
             "city":    "Detroit", "state": "MI", "source": "Detroit DLBA",
+            "is_link_only": True,
         },
     ]
 
