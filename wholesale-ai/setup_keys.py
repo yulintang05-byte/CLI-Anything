@@ -68,6 +68,24 @@ KEYS = [
         "required_for": "Auto-export deal cards to your Obsidian vault",
         "optional": True,
     },
+    {
+        "name": "SENDGRID_API_KEY",
+        "label": "SendGrid — auto-send outreach emails (preferred over SMTP)",
+        "where": "https://app.sendgrid.com/  →  Settings → API Keys → Create API Key",
+        "cost": "FREE up to 100 emails/day. More than enough for deals.",
+        "starts": "SG.",
+        "required_for": "Auto-email sellers when close package is built",
+        "optional": True,
+    },
+    {
+        "name": "EMAIL_FROM",
+        "label": "Your sender email address (used if no SendGrid key)",
+        "where": "Your business email address, e.g. alberto@yourdomain.com",
+        "cost": "N/A",
+        "starts": "",
+        "required_for": "SMTP fallback email sending",
+        "optional": True,
+    },
 ]
 
 
@@ -104,6 +122,20 @@ def write_env(vals: dict):
         "",
         "# ─── Optional: ATTOM Data API (attomdata.com) ──────────────────────────",
         f"ATTOM_API_KEY={vals.get('ATTOM_API_KEY','')}",
+        "",
+        "# ─── ElevenLabs — voice outreach MP3s (elevenlabs.io) ──────────────────",
+        f"ELEVENLABS_API_KEY={vals.get('ELEVENLABS_API_KEY','')}",
+        f"ELEVENLABS_VOICE_ID={vals.get('ELEVENLABS_VOICE_ID','')}",
+        "",
+        "# ─── Obsidian vault — deal notes auto-sync ──────────────────────────────",
+        f"OBSIDIAN_VAULT_PATH={vals.get('OBSIDIAN_VAULT_PATH','')}",
+        "",
+        "# ─── Email outreach — SendGrid (preferred) or SMTP ─────────────────────",
+        f"SENDGRID_API_KEY={vals.get('SENDGRID_API_KEY','')}",
+        f"EMAIL_FROM={vals.get('EMAIL_FROM','')}",
+        f"EMAIL_PASSWORD={vals.get('EMAIL_PASSWORD','')}",
+        f"EMAIL_SMTP_HOST={vals.get('EMAIL_SMTP_HOST','')}",
+        f"EMAIL_SMTP_PORT={vals.get('EMAIL_SMTP_PORT','587')}",
         "",
     ]
     ENV_FILE.write_text("\n".join(lines))

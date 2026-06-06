@@ -146,6 +146,7 @@ from modules.elevenlabs_voice import (
 from modules.obsidian_sync import (
     export_deal_to_obsidian, export_pipeline_digest_to_obsidian, vault_status,
 )
+from modules.email_sender import queue_deal_outreach, email_status
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -712,15 +713,13 @@ EMAIL:
     # ── ElevenLabs voicemail audio ────────────────────────────────────────────
     if voice_has_key():
         console.print("\n[dim]Generating voicemail audio via ElevenLabs...[/dim]")
-        profile = load_profile()
-        phone   = profile.get("phone", "")
-        seller_type_key = detect_seller_type_from_lead({"days_on_market": 90})
+        phone   = inv_phone
         vm_path = generate_voicemail(
             property_address = address,
-            investor_name    = profile.get("name", "Alberto"),
+            investor_name    = inv_name,
             investor_phone   = phone,
-            seller_type      = seller_type_key,
-            output_dir       = ".",
+            seller_type      = seller_type,
+            output_dir       = "output/voicemails",
         )
         if vm_path:
             console.print(f"[green]✓ Voicemail MP3:[/green] {vm_path}  [dim](play this when seller picks up)[/dim]")
@@ -743,15 +742,33 @@ EMAIL:
             email_body  = scripts.get("email", {}).get("body", ""),
         )
 
-    voices_line = "[green]✓ Voicemail audio generated (ElevenLabs)[/green]\n  " if voice_has_key() else ""
-    obsidian_line = "[green]✓ Deal note saved to Obsidian vault[/green]\n  " if vs["configured"] else ""
+    # ── Auto email outreach ───────────────────────────────────────────────────
+    es = email_status()
+    email_sent = False
+    seller_email = lead.get("seller_email", lead.get("contact_email", ""))
+    if es["configured"] and seller_email:
+        console.print(f"\n[dim]Sending outreach email via {es['provider']}...[/dim]")
+        email_data = scripts.get("email", {})
+        email_sent = queue_deal_outreach(
+            seller_email      = seller_email,
+            property_address  = address,
+            email_subject     = email_data.get("subject", f"Quick question about {address}"),
+            email_body        = email_data.get("body", scripts.get("sms", "")),
+            investor_name     = inv_name,
+            investor_email    = inv_email,
+        )
+
+    voices_line  = "[green]✓ Voicemail audio generated (ElevenLabs)[/green]" if voice_has_key() else ""
+    obsidian_line = "[green]✓ Deal note saved to Obsidian vault[/green]" if vs["configured"] else ""
+    email_line   = f"[green]✓ Outreach email sent ({es['provider']})[/green]" if email_sent else ""
+
+    status_lines = "\n  ".join(filter(None, [voices_line, obsidian_line, email_line]))
 
     console.print(Panel(
         f"  [bold green]✓ Pipeline entry created[/bold green]  ID: {deal_in_pipe['id']}\n"
         f"  [bold green]✓ Outreach scripts ready[/bold green]  (SMS → call → email)\n"
         f"  [bold green]✓ Buyer match complete[/bold green]   (who to assign to)\n"
-        + (f"  {voices_line}" if voice_has_key() else "")
-        + (f"  {obsidian_line}" if vs["configured"] else "")
+        + (f"  {status_lines}\n" if status_lines else "")
         + f"\n  [bold yellow]NEXT STEP:[/bold yellow] Send the SMS above to the seller NOW.\n"
         f"  When they respond: run negotiation script (option 26 → option 4)\n"
         f"  When they accept: generate contract (option 26 → option 5)",

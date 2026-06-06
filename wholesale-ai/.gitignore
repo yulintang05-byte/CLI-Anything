@@ -9,6 +9,8 @@ __pycache__/
 close_package_*.txt
 outreach_*.txt
 *_contract_*.txt
+output/
+*.mp3
 
 # Local agent state (lives in ~/.wholesale-ai/ anyway)
 .wholesale-ai/

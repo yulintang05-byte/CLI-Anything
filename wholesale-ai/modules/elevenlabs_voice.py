@@ -127,6 +127,7 @@ def generate_voicemail(
     # Sanitize address for filename
     safe_addr = property_address.replace(" ", "_").replace(",", "").replace("/", "-")[:50]
     filename  = f"voicemail_{safe_addr}.mp3"
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
     out_path  = str(Path(output_dir) / filename)
 
     result = speak_script(script, output_path=out_path)
