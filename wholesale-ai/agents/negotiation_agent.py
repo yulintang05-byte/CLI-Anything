@@ -210,6 +210,7 @@ class NegotiationAgent:
         try:
             resp = self.client.messages.create(
                 model=MODEL, max_tokens=800,
+                system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
             import json
@@ -220,5 +221,5 @@ class NegotiationAgent:
                 current.update(new)
                 save_patterns(self.name, current)
                 log_activity(self.name, "learned", f"Updated from {len(closed_deals)} deals")
-        except Exception:
-            pass
+        except Exception as e:
+            log_activity(self.name, "learn_failed", str(e)[:120])

@@ -94,6 +94,7 @@ class AgentRunner:
                         price=price, arv=lead.get("arv_est") or price * 6,
                         market_rent=lead.get("rent_est") or 950,
                         state=lead.get("state", "MI"), condition="medium",
+                        sqft=lead.get("sqft", 1000),
                         buyer_credit_score=self.profile.get("credit_score", 730),
                         buyer_cash=self.profile.get("available_cash", 12000),
                     )

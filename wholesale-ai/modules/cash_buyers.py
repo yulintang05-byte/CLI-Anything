@@ -404,10 +404,11 @@ def match_buyers_to_deal(
         market_match  = not buyer_markets or any(
             city_lower in bm or bm in city_lower for bm in buyer_markets
         )
-        # Price match
+        # Price match — treat price_max=0 as "no ceiling set"
+        p_max = buyer.get("price_max", 0)
         price_match = (
-            (buyer.get("price_min", 0) <= price <= buyer.get("price_max", 9e9))
-            if buyer.get("price_max") else True
+            (buyer.get("price_min", 0) <= price <= p_max)
+            if p_max > 0 else True
         )
         # Type match
         type_match = buyer.get("buyer_type") in [r[1] for r in ranked_types[:3]]

@@ -168,10 +168,9 @@ def _save_morning_digest(summary: dict) -> None:
             "high_margin":  summary.get("high_margin", 0),
             "hot_deals":    summary.get("hot_deals", []),
         }
-    except Exception:
-        # If daily_digest fails for any reason, silently continue —
-        # the last_scan.json is the authoritative record.
-        pass
+    except Exception as e:
+        # Daily digest is non-critical — last_scan.json is authoritative.
+        print(f"  [scheduler] digest generation skipped: {e}")
 
 
 # ── Background thread ─────────────────────────────────────────────────────────

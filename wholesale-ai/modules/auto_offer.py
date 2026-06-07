@@ -157,12 +157,16 @@ Write a confident, professional offer email. Include:
 
 Keep it concise — under 250 words. No fluff. Ready to copy and send."""
 
-    response = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=600,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    try:
+        response = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+    except Exception as e:
+        print(f"  [auto_offer] AI email generation failed: {e}")
+        return result["body"]
 
 
 def batch_generate_offers(
