@@ -15,6 +15,15 @@
         "name": "cli-anything contributors"
       },
       "category": "development"
+    },
+    {
+      "name": "sp-global",
+      "source": "./sp-global-plugin",
+      "description": "S&P Global plugin: wires Claude Code to the Kensho LLM-ready API via the official kfinance MCP server, with setup and research commands.",
+      "author": {
+        "name": "S&P Global"
+      },
+      "category": "data"
     }
   ]
 }

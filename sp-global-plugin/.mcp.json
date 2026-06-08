@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kfinance": {
+      "command": "python3",
+      "args": ["-m", "kfinance.mcp", "--stdio"]
+    }
+  }
+}

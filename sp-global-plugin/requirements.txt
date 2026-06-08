@@ -1,0 +1,3 @@
+# Kensho LLM-ready API client + MCP server (S&P Global data).
+# Provides the `kfinance` module launched by .mcp.json (python -m kfinance.mcp).
+kensho-kfinance
