@@ -681,8 +681,8 @@ def _one_click_close_package(lead: dict):
             border_style="cyan",
         ))
 
-    # 5. Save full package to file
-    if Confirm.ask("\nSave full package to file?", default=True):
+    # 5. Save full package to file — always auto-save
+    if True:
         safe   = address.replace(" ", "_").replace(",", "")[:30]
         fname  = f"close_package_{safe}.txt"
         email  = scripts["email"]
@@ -777,6 +777,44 @@ EMAIL:
         f"  When they respond: run negotiation script (option 26 → option 4)\n"
         f"  When they accept: generate contract (option 26 → option 5)",
         title="[bold green]⚡ PACKAGE COMPLETE — Alberto only signs[/bold green]",
+        border_style="green",
+    ))
+
+
+def _auto_generate_contract(lead: dict):
+    """
+    Auto-generate assignment contract the moment a HIGH MARGIN deal is found.
+    Alberto only needs to sign — everything else is pre-filled.
+    """
+    from agents.closing_agent import ClosingAgent
+    profile  = load_profile()
+    address  = lead.get("title", "Unknown")
+    price    = lead.get("price", 0)
+    analysis = lead.get("full_analysis", {})
+    fee      = max(
+        profile.get("target_assignment_fee_min", 5000),
+        analysis.get("flip", {}).get("wholesale_fee", 10000),
+    )
+
+    agent = ClosingAgent(profile=profile)
+    result = agent.generate_contract(
+        contract_type   = "assignment",
+        buyer_name      = f"{profile.get('name','Alberto Soriano')} and/or assigns",
+        seller_name     = lead.get("seller_name", "[SELLER NAME]"),
+        address         = address,
+        purchase_price  = price,
+        emd             = profile.get("emd_amount", 1000),
+        closing_days    = profile.get("closing_days", 21),
+        assignment_fee  = fee,
+        inspection_days = 14,
+        extra_terms     = "Buyer and/or assigns. Seller to cooperate with assignment.",
+    )
+    console.print(Panel(
+        f"  [bold green]✓ Assignment contract generated[/bold green]\n"
+        f"  File: [cyan]{result['filename']}[/cyan]\n"
+        f"  Assignment fee: [bold green]${fee:,.0f}[/bold green]  |  Close in {profile.get('closing_days',21)} days\n\n"
+        f"  [bold yellow]ALBERTO'S ONLY JOB:[/bold yellow] Open the file above and sign line 208.",
+        title="[bold green]3. CONTRACT — READY TO SIGN[/bold green]",
         border_style="green",
     ))
 
@@ -2463,8 +2501,11 @@ def menu_live_leads():
     analyzed = result.get("analyzed_leads", [])
 
     if ready:
-        console.print(f"\n[bold green]⭐ {len(ready)} HIGH MARGIN DEALS — Ready for Review:[/bold green]\n")
-        for lead in ready:
+        console.print(f"\n[bold green]⭐ {len(ready)} HIGH MARGIN DEAL(S) — Auto-processing all...[/bold green]\n")
+        for i, lead in enumerate(ready, 1):
+            if lead.get("is_link_only") or lead.get("status") == "link_only":
+                continue
+            console.print(f"[bold cyan]── Deal {i}/{len(ready)}: {lead.get('title','')[:60]} ──[/bold cyan]")
             display_full_deal_card(
                 lead["full_analysis"],
                 address=lead.get("title", "")[:60],
@@ -2472,10 +2513,8 @@ def menu_live_leads():
                 warning=lead.get("data_warning", ""),
             )
             console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
-            if Confirm.ask("  [bold green]⚡ Generate FULL CLOSE PACKAGE for this deal?[/bold green]", default=True):
-                _one_click_close_package(lead)
-            if not Confirm.ask("See next deal?", default=True):
-                break
+            _one_click_close_package(lead)
+            _auto_generate_contract(lead)
     elif analyzed:
         console.print(f"\n[cyan]{len(analyzed)} analyzed leads:[/cyan]\n")
         t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
@@ -2508,8 +2547,6 @@ def menu_live_leads():
         else:
             console.print("[yellow]No leads scored ≥6 this scan. Try different markets or higher max price.[/yellow]")
 
-    if Confirm.ask("\nSave a deal to your pipeline?", default=False):
-        _pipeline_add()
     press_enter()
 
 
