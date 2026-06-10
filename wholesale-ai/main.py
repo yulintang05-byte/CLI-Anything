@@ -3748,7 +3748,7 @@ def menu_morning_digest():
                       currency(lead.get("price", 0)), lead.get("best_strategy","?"))
         console.print(t)
 
-    console.print("\n[dim]Tip: Run option 26 to let agents scan for new deals right now.[/dim]")
+    console.print("\n[dim]Tip: Run option [bold]23[/bold] for a live scan right now. Option [bold]36[/bold] to set up daily auto-scan.[/dim]")
     press_enter()
 
 

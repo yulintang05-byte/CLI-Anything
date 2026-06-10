@@ -76,7 +76,7 @@ def generate_morning_digest(markets: list = None) -> dict:
     # Build action items
     action_items = []
     if high_margin:
-        action_items.append(f"⭐ Review {len(high_margin)} HIGH MARGIN deal(s) — run the deal card (option 3)")
+        action_items.append(f"⭐ {len(high_margin)} HIGH MARGIN deal(s) waiting — run option 23 to process them")
     if under_contract:
         action_items.append(f"📝 {len(under_contract)} deal(s) Under Contract — follow up on inspection / closing")
     if offer_out:
@@ -84,7 +84,7 @@ def generate_morning_digest(markets: list = None) -> dict:
     if marketing:
         action_items.append(f"🔍 {len(marketing)} deal(s) being marketed — push to buyer list")
     if not new_leads:
-        action_items.append("🔎 Run agents (option 26) to find today's deals")
+        action_items.append("🔎 Run live scan (option 23) to find today's deals")
     if stats.get("won", 0) == 0:
         action_items.append("💡 No closed deals yet — focus on locking up one contract this week")
 
