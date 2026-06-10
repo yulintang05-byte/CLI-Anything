@@ -196,10 +196,9 @@ class LeadAgent:
                 "state": state, "city": "",
             })
 
-        # ── Score and save each raw lead ──────────────────────────────
+        # ── Score all raw leads first (initial estimate, no AVM yet) ────
         for raw in all_raw:
             if raw.get("is_link_only"):
-                # Save as a research link, not a scored lead
                 raw["status"] = "link_only"
                 raw["score"]  = 0
             else:
@@ -207,9 +206,22 @@ class LeadAgent:
                 min_score     = self.patterns.get("min_lead_score", 6.0)
                 raw["status"] = "new" if raw["score"] >= min_score else "low_score"
 
-            # Run full strategy analysis on priced leads
+        # ── Cap AVM enrichment to top N leads ─────────────────────────
+        # RentCast free tier = 50 calls/month. enrich_with_avm costs 2 calls
+        # (1 value + 1 rent). Cap at 10 leads per scan = 20 AVM calls max,
+        # leaving room for multiple scans in a month.
+        # Prioritise highest-scored leads so the best deals always get real data.
+        MAX_AVM_LEADS = 10
+        priced = sorted(
+            [r for r in all_raw if r.get("price", 0) > 0 and r.get("score", 0) >= 6],
+            key=lambda x: x.get("score", 0), reverse=True,
+        )
+        avm_allowed = {id(r) for r in priced[:MAX_AVM_LEADS]}
+
+        # ── Enrich and save each lead ─────────────────────────────────
+        for raw in all_raw:
             if raw.get("price", 0) > 0 and raw.get("score", 0) >= 6:
-                raw = self._enrich_lead(raw)
+                raw = self._enrich_lead(raw, use_avm=(id(raw) in avm_allowed))
                 if raw.get("high_margin"):
                     high_margin += 1
 
@@ -240,7 +252,7 @@ class LeadAgent:
 
     # ── Lead enrichment ───────────────────────────────────────────────────
 
-    def _enrich_lead(self, lead: dict) -> dict:
+    def _enrich_lead(self, lead: dict, use_avm: bool = True) -> dict:
         """Run all_strategies_analysis on a priced lead."""
         price = lead.get("price", 0)
         if price <= 0:
@@ -286,7 +298,9 @@ class LeadAgent:
         arv_mult = self.patterns.get("min_arv_multiple", 6.0)
 
         # Prefer REAL RentCast AVM data over any estimate.
-        if rentcast.has_api_key() and lead.get("source", "").startswith("RentCast"):
+        # use_avm=False when this lead is outside the per-scan AVM cap
+        # (top 10 leads get real data; the rest use market estimates).
+        if use_avm and rentcast.has_api_key() and lead.get("source", "").startswith("RentCast"):
             lead = rentcast.enrich_with_avm(lead)
 
         if lead.get("arv_real"):
