@@ -166,7 +166,17 @@ Keep it concise — under 250 words. No fluff. Ready to copy and send."""
         return response.content[0].text
     except Exception as e:
         print(f"  [auto_offer] AI email generation failed: {e}")
-        return result["body"]
+        fallback = generate_offer_email(
+            seller_name=property_data.get("contact_name", "Property Owner"),
+            seller_email=property_data.get("contact_email", ""),
+            seller_phone=property_data.get("contact_phone", ""),
+            property_address=property_data.get("address", ""),
+            list_price=property_data.get("price", offer_price),
+            offer_price=offer_price,
+            financing_type=property_data.get("financing_type", "DSCR Loan"),
+            profile=profile,
+        )
+        return fallback["body"]
 
 
 def batch_generate_offers(

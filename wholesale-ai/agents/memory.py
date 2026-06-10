@@ -9,7 +9,7 @@ import json
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 MEM_DIR = Path.home() / ".wholesale-ai" / "agents"
 LEADS_FILE    = MEM_DIR / "leads.json"
@@ -22,7 +22,7 @@ def _ensure_dir():
     MEM_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _read(path: Path, default) -> any:
+def _read(path: Path, default) -> Any:
     _ensure_dir()
     if not path.exists():
         return default
@@ -32,7 +32,7 @@ def _read(path: Path, default) -> any:
         return default
 
 
-def _write(path: Path, data: any):
+def _write(path: Path, data: Any):
     _ensure_dir()
     path.write_text(json.dumps(data, indent=2, default=str))
 

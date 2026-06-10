@@ -2521,12 +2521,19 @@ def menu_live_leads():
                 warning=lead.get("data_warning", ""),
             )
             console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
-            # DLBA-risk deals: show the card but DO NOT auto-build outreach or
-            # contracts until the owner is verified at buildingdetroit.org
-            if "DLBA RISK" in str(lead.get("data_warning", "")):
+            # Any data_warning means the numbers are suspect — hold auto-outreach
+            # until verification. DLBA deals need buildingdetroit.org check;
+            # inflated ARV deals need manual comps (option 35) first.
+            warning_text = str(lead.get("data_warning", ""))
+            if warning_text:
+                if "DLBA RISK" in warning_text or "Land Bank" in warning_text:
+                    reason = "verify owner is NOT Detroit Land Bank at buildingdetroit.org"
+                elif "AVM ARV" in warning_text:
+                    reason = "run comp validator (option 35) to get a real ARV before outreach"
+                else:
+                    reason = "review the warning above before sending outreach"
                 console.print(
-                    "[bold yellow]⏸ HELD — verify owner is not Detroit Land Bank "
-                    "before this deal gets a close package.[/bold yellow]\n"
+                    f"[bold yellow]⏸ HELD — {reason}.[/bold yellow]\n"
                 )
                 continue
             _one_click_close_package(lead)
