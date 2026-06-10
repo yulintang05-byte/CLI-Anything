@@ -53,7 +53,7 @@ KEYS = [
     {
         "name": "ELEVENLABS_VOICE_ID",
         "label": "ElevenLabs Voice ID (which voice speaks your scripts)",
-        "where": "Leave blank for default (Adam — professional US male). Find IDs at elevenlabs.io/voice-library",
+        "where": "Leave blank for default (Roger — deep professional US male). Find IDs at elevenlabs.io/voice-library",
         "cost": "N/A",
         "starts": "",
         "required_for": "ElevenLabs voice selection",
