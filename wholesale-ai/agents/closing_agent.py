@@ -451,5 +451,5 @@ End Buyer:           _________________________ Date: __________
                 current = load_patterns(self.name)
                 current.update(new)
                 save_patterns(self.name, current)
-        except Exception:
-            pass
+        except Exception as e:
+            log_activity(self.name, "learn_failed", str(e)[:120])

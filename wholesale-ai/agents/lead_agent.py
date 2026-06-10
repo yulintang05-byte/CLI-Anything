@@ -400,8 +400,8 @@ class LeadAgent:
                     lead["ai_score"]     = float(m.group(1))
                     lead["ai_reasoning"] = m.group(2).strip()
                     lead["score"]        = max(lead["score"], lead["ai_score"])
-        except Exception:
-            pass
+        except Exception as e:
+            log_activity(self.name, "ai_score_failed", str(e)[:120])
 
         return leads
 
@@ -446,8 +446,8 @@ class LeadAgent:
                 current["deals_analyzed"] = len(closed_deals)
                 save_patterns(self.name, current)
                 log_activity(self.name, "learned", f"Updated patterns from {len(closed_deals)} deals")
-        except Exception:
-            pass
+        except Exception as e:
+            log_activity(self.name, "learn_failed", str(e)[:120])
 
 
 def json_summary(deals: list) -> str:
