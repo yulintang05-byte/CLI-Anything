@@ -796,15 +796,27 @@ class TestCLISubprocess:
 
 # ── True Backend E2E Tests (requires Inkscape installed) ─────────
 
+def _has_inkscape():
+    """Check if the Inkscape binary is available."""
+    from cli_anything.inkscape.utils.inkscape_backend import find_inkscape
+    try:
+        find_inkscape()
+        return True
+    except RuntimeError:
+        return False
+
+
 class TestInkscapeBackend:
     """Tests that verify Inkscape is installed and accessible."""
 
+    @pytest.mark.skipif(not _has_inkscape(), reason="Inkscape not installed")
     def test_inkscape_is_installed(self):
         from cli_anything.inkscape.utils.inkscape_backend import find_inkscape
         path = find_inkscape()
         assert os.path.exists(path)
         print(f"\n  Inkscape binary: {path}")
 
+    @pytest.mark.skipif(not _has_inkscape(), reason="Inkscape not installed")
     def test_inkscape_version(self):
         from cli_anything.inkscape.utils.inkscape_backend import get_version
         version = get_version()
@@ -815,6 +827,7 @@ class TestInkscapeBackend:
 class TestInkscapeExportE2E:
     """True E2E tests: create SVG → Inkscape export → verify output."""
 
+    @pytest.mark.skipif(not _has_inkscape(), reason="Inkscape not installed")
     def test_svg_to_png(self):
         """Export SVG to PNG using Inkscape."""
         from cli_anything.inkscape.utils.inkscape_backend import export_svg_to_png
