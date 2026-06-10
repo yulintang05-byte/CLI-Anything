@@ -2513,6 +2513,14 @@ def menu_live_leads():
                 warning=lead.get("data_warning", ""),
             )
             console.print(f"  [dim]URL: {lead.get('url', '')}[/dim]\n")
+            # DLBA-risk deals: show the card but DO NOT auto-build outreach or
+            # contracts until the owner is verified at buildingdetroit.org
+            if "DLBA RISK" in str(lead.get("data_warning", "")):
+                console.print(
+                    "[bold yellow]⏸ HELD — verify owner is not Detroit Land Bank "
+                    "before this deal gets a close package.[/bold yellow]\n"
+                )
+                continue
             _one_click_close_package(lead)
             _auto_generate_contract(lead)
     elif analyzed:

@@ -64,6 +64,31 @@ _DLBA_TEXT_FLAGS = [
     "dlba", "land bank authority", "buildingdetroit",
 ]
 
+# Addresses confirmed (via manual web verification) to be DLBA-owned even
+# though the listing feed carries no DLBA markers. RentCast syndicates these
+# with a normal agent name, so text/agent detection can't catch them.
+# Extend via ~/.wholesale-ai/blocklist.json — one address substring per entry.
+_KNOWN_DLBA_ADDRESSES = [
+    "3240 glynn ct",
+    "3758 rochester st",
+]
+
+_BLOCKLIST_FILE = os.path.join(
+    os.path.expanduser("~"), ".wholesale-ai", "blocklist.json"
+)
+
+
+def _address_blocklist() -> list:
+    """Built-in known-DLBA addresses + user-extendable blocklist file."""
+    entries = list(_KNOWN_DLBA_ADDRESSES)
+    try:
+        import json
+        with open(_BLOCKLIST_FILE) as f:
+            entries += [str(a).lower() for a in json.load(f)]
+    except Exception:
+        pass
+    return entries
+
 
 def _looks_like_land(lead: dict) -> bool:
     """True if a lead is a vacant lot / land parcel rather than a structure."""
@@ -90,6 +115,10 @@ def _is_dlba_house(lead: dict) -> bool:
     """True if this real house is owned/sold by the Detroit Land Bank Authority."""
     if lead.get("is_link_only") and "dlba" in str(lead.get("data_warning", "")).lower():
         return True  # already flagged upstream by rentcast module
+    # Hard blocklist: addresses verified DLBA-owned but listed without markers
+    addr = str(lead.get("title", "")).lower()
+    if any(blocked in addr for blocked in _address_blocklist()):
+        return True
     blob = " ".join(str(lead.get(f, "")) for f in
                     ("title", "description", "raw_text", "source")).lower()
     return any(flag in blob for flag in _DLBA_TEXT_FLAGS)
@@ -239,6 +268,17 @@ class LeadAgent:
             lead["high_margin"]  = False
             lead["score"]        = 0
             return lead
+
+        # Sub-$30k Detroit listings are overwhelmingly DLBA inventory that
+        # RentCast syndicates WITHOUT any DLBA markers (verified twice:
+        # 3240 Glynn Ct, 3758 Rochester St). Don't block — but force a
+        # verification warning so no outreach fires before a human/web check.
+        city_l = str(lead.get("city", "")).lower()
+        if "detroit" in city_l and 0 < price < 30000 and not lead.get("data_warning"):
+            lead["data_warning"] = (
+                "Sub-$30k Detroit listing — HIGH DLBA RISK. Verify owner is not "
+                "Detroit Land Bank at buildingdetroit.org BEFORE any outreach."
+            )
 
         # Estimate ARV from hot market data
         city  = lead.get("city", "Detroit")
