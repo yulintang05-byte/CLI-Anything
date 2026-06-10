@@ -62,6 +62,11 @@ _LAND_TYPE_FLAGS = ("land", "lot", "vacant")
 _DLBA_TEXT_FLAGS = [
     "detroit land bank", "building detroit", "own it now",
     "dlba", "land bank authority", "buildingdetroit",
+    # Land-bank program tells that appear even when the org name doesn't:
+    "land bank", "reno covenant", "renovation covenant",
+    "proof of construction funds", "construction funds required",
+    "no land contract", "sold as a bundle", "house bundle",
+    "compliance period", "nuisance abatement",
 ]
 
 # Addresses confirmed (via manual web verification) to be DLBA-owned even
@@ -119,8 +124,12 @@ def _is_dlba_house(lead: dict) -> bool:
     addr = str(lead.get("title", "")).lower()
     if any(blocked in addr for blocked in _address_blocklist()):
         return True
+    # Scan listing-party fields too: RentCast syndicates land-bank houses
+    # with populated beds/sqft, so the only marker may be the agent/office.
     blob = " ".join(str(lead.get(f, "")) for f in
-                    ("title", "description", "raw_text", "source")).lower()
+                    ("title", "description", "raw_text", "source",
+                     "agent", "agent_name", "listing_agent", "office",
+                     "office_name", "broker", "seller", "owner")).lower()
     return any(flag in blob for flag in _DLBA_TEXT_FLAGS)
 
 
