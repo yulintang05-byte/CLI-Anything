@@ -2842,7 +2842,8 @@ def menu_run_agents():
     )
 
     console.print(
-        "  [1] Run full pipeline now (find → analyze → flag)\n"
+        "  [1] Run pipeline — find & score leads (review mode, no auto-close)\n"
+        "      → Use option [bold]23[/bold] for the full auto-close experience\n"
         "  [2] Start background agents (runs every N hours)\n"
         "  [3] Stop background agents\n"
         "  [4] Generate AI negotiation script\n"
