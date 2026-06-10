@@ -306,12 +306,12 @@ def score_raw_lead(lead: dict, target_arv_multiplier: float = 6.0) -> float:
     signals = lead.get("distress_signals", [])
     score += min(2.0, len(signals) * 0.5)
 
-    # Source quality
+    # Source quality — RentCast is live verified data; Tax Deed = forced seller
     source_scores = {
-        "Detroit DLBA": 2.0,
-        "Tax Deed":     1.5,
+        "RentCast (live)": 1.0,
+        "Tax Deed":        1.5,
         "Craigslist FSBO": 1.0,
-        "HUD HomeStore": 1.5,
+        "HUD HomeStore":   1.5,
     }
     score += source_scores.get(lead.get("source", ""), 0)
 
