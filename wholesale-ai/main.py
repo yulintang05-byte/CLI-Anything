@@ -715,6 +715,7 @@ EMAIL:
         console.print(f"[green]✓ Full package saved to {fname}[/green]")
 
     # ── ElevenLabs voicemail audio ────────────────────────────────────────────
+    vm_path = None
     if voice_has_key():
         console.print("\n[dim]Generating voicemail audio via ElevenLabs...[/dim]")
         phone   = inv_phone
@@ -762,7 +763,12 @@ EMAIL:
             investor_email    = inv_email,
         )
 
-    voices_line  = "[green]✓ Voicemail audio generated (ElevenLabs)[/green]" if voice_has_key() else ""
+    if vm_path:
+        voices_line = "[green]✓ Voicemail audio generated (ElevenLabs)[/green]"
+    elif voice_has_key():
+        voices_line = "[yellow]⚠ Voicemail FAILED — check ElevenLabs key / credits[/yellow]"
+    else:
+        voices_line = ""
     obsidian_line = "[green]✓ Deal note saved to Obsidian vault[/green]" if vs["configured"] else ""
     email_line   = f"[green]✓ Outreach email sent ({es['provider']})[/green]" if email_sent else ""
 
@@ -791,10 +797,12 @@ def _auto_generate_contract(lead: dict):
     address  = lead.get("title", "Unknown")
     price    = lead.get("price", 0)
     analysis = lead.get("full_analysis", {})
-    fee      = max(
-        profile.get("target_assignment_fee_min", 5000),
-        analysis.get("flip", {}).get("wholesale_fee", 10000),
-    )
+    # Clamp the fee to Alberto's target band — analysis wholesale_fee can be
+    # fantasy-large when the ARV is inflated (e.g. $88k on a $30k house).
+    fee_min  = profile.get("target_assignment_fee_min", 5000)
+    fee_max  = profile.get("target_assignment_fee_max", 15000)
+    raw_fee  = analysis.get("flip", {}).get("wholesale_fee", 10000)
+    fee      = max(fee_min, min(raw_fee, fee_max))
 
     agent = ClosingAgent(profile=profile)
     result = agent.generate_contract(

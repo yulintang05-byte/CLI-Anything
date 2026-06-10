@@ -316,6 +316,17 @@ class LeadAgent:
             lead.pop("rent_real", None)
             rent = fallback_rent
 
+        # ARV sanity: an AVM ARV more than 5× the asking price is almost always
+        # the ZIP-wide median bleeding into a rough sub-neighborhood (verified:
+        # 4317 11th Ave N — AVM said $202k, Kingston's actual median is $73k).
+        # Don't block, but force comp verification before anyone quotes it.
+        if price > 0 and arv / price > 5 and not lead.get("data_warning"):
+            lead["data_warning"] = (
+                f"AVM ARV ${arv:,.0f} is {arv/price:.1f}× the ${price:,.0f} ask — "
+                f"likely ZIP-median bleed into a cheaper micro-neighborhood. "
+                f"Run comps (option 35) before quoting ARV to anyone."
+            )
+
         try:
             credit = self.profile.get("credit_score", 730)
             cash   = self.profile.get("available_cash", 12000)
