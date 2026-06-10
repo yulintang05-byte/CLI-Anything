@@ -10,7 +10,7 @@ If the test video is missing, all tests are skipped automatically.
 """
 
 import os
-import subprocess
+import shutil
 import json
 import sys
 import pytest
@@ -24,19 +24,17 @@ from cli_anything.clipper.core import filters as filters_mod
 from cli_anything.clipper.core import export as export_mod
 
 TEST_VIDEO = "/root/clipper/test.mp4"
-FFMPEG_AVAILABLE = (
-    subprocess.run(["ffmpeg", "-version"], capture_output=True).returncode == 0
-)
+FFMPEG_AVAILABLE = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
 VIDEO_AVAILABLE = os.path.isfile(TEST_VIDEO)
 
 requires_media = pytest.mark.skipif(
     not (FFMPEG_AVAILABLE and VIDEO_AVAILABLE),
-    reason=f"Requires ffmpeg and test video at {TEST_VIDEO}",
+    reason=f"Requires ffmpeg/ffprobe and test video at {TEST_VIDEO}",
 )
 
 requires_ffmpeg = pytest.mark.skipif(
     not FFMPEG_AVAILABLE,
-    reason="Requires ffmpeg to be installed",
+    reason="Requires ffmpeg/ffprobe to be installed",
 )
 
 

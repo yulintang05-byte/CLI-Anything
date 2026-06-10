@@ -533,15 +533,27 @@ class TestRealWorldWorkflows:
 
 # ── True Backend E2E Tests (requires GIMP installed) ─────────────
 
+def _has_gimp():
+    """Check if the GIMP binary is available."""
+    from cli_anything.gimp.utils.gimp_backend import find_gimp
+    try:
+        find_gimp()
+        return True
+    except RuntimeError:
+        return False
+
+
 class TestGIMPBackend:
     """Tests that verify GIMP is installed and accessible."""
 
+    @pytest.mark.skipif(not _has_gimp(), reason="GIMP binary not installed")
     def test_gimp_is_installed(self):
         from cli_anything.gimp.utils.gimp_backend import find_gimp
         path = find_gimp()
         assert os.path.exists(path)
         print(f"\n  GIMP binary: {path}")
 
+    @pytest.mark.skipif(not _has_gimp(), reason="GIMP binary not installed")
     def test_gimp_version(self):
         from cli_anything.gimp.utils.gimp_backend import get_version
         version = get_version()
@@ -552,6 +564,7 @@ class TestGIMPBackend:
 class TestGIMPRenderE2E:
     """True E2E tests using GIMP batch mode."""
 
+    @pytest.mark.skipif(not _has_gimp(), reason="GIMP binary not installed")
     def test_create_and_export_png(self):
         """Create a blank image in GIMP and export as PNG."""
         from cli_anything.gimp.utils.gimp_backend import create_and_export
@@ -565,6 +578,7 @@ class TestGIMPRenderE2E:
             assert result["method"] == "gimp-batch"
             print(f"\n  GIMP PNG: {result['output']} ({result['file_size']:,} bytes)")
 
+    @pytest.mark.skipif(not _has_gimp(), reason="GIMP binary not installed")
     def test_create_and_export_jpeg(self):
         """Create a blank image in GIMP and export as JPEG."""
         from cli_anything.gimp.utils.gimp_backend import create_and_export
