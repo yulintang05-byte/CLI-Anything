@@ -5,9 +5,9 @@ per-agent exception is caught, logged as a warning, and the swarm continues.
 
 Schedule
 --------
-* Every  6 h  — SocialAgent  (Twitter / X threads)
-* Every 12 h  — RedditAgent
-* Every 24 h  — SEOAgent, DevToAgent, VideoAgent
+* Every  4 h  — SocialAgent  (Twitter / X threads)
+* Every 12 h  — RedditAgent, SEOAgent, VideoAgent
+* Every 24 h  — DevToAgent
 * Every 72 h  — HNAgent
 
 Each "tick" is one hour.  The orchestrator sleeps 3 600 s between ticks and
@@ -152,12 +152,12 @@ def print_status_table(results: list[dict[str, Any]]) -> None:
 
 # Interval in hours for each agent class.
 AGENT_INTERVALS: dict[str, int] = {
-    "SocialAgent":  6,
-    "RedditAgent":  12,
-    "SEOAgent":     24,
-    "DevToAgent":   24,
-    "VideoAgent":   24,
-    "HNAgent":      72,
+    "SocialAgent":  4,   # max safe cadence — X tolerates frequent threads
+    "RedditAgent":  12,  # kept at 12h: faster gets accounts shadowbanned
+    "SEOAgent":     12,  # doubled — more long-tail pages, more search surface
+    "DevToAgent":   24,  # Dev.to rate-limits aggressive publishing
+    "VideoAgent":   12,  # doubled — daily Shorts + long-form scripts
+    "HNAgent":      72,  # kept: reposting HN faster guarantees a ban
 }
 
 

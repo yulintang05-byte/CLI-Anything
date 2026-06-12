@@ -11,6 +11,13 @@ TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET", "")
 TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "")
 TWITTER_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_SECRET", "")
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY", "")
+
+# Model settings — newest, most capable first; fallbacks for accounts that
+# don't have access to the latest model yet.
+MODEL = os.getenv("HERMES_MARKETING_MODEL", "claude-fable-5")
+MODEL_FALLBACKS = ["claude-opus-4-8", "claude-sonnet-4-6"]
+MAX_TOKENS = int(os.getenv("HERMES_MARKETING_MAX_TOKENS", "8192"))
+
 PRODUCT_NAME = "Hermes"
 PRODUCT_TAGLINE = "The terminal Claude deserves."
 PRODUCT_URL = "https://hermes.sh"
