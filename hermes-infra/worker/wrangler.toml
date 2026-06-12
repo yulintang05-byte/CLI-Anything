@@ -1,6 +1,7 @@
-name            = "hermes-license-proxy"
-main            = "src/index.js"
+name               = "hermes-license-proxy"
+main               = "src/index.js"
 compatibility_date = "2024-01-01"
+account_id         = "d90fe253059501e94878ac510dc6d655"
 
 # ---------------------------------------------------------------------------
 # Workers & Pages — runtime settings
