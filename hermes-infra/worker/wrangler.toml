@@ -19,11 +19,9 @@ ENVIRONMENT = "production"
 
 # ---------------------------------------------------------------------------
 # Secrets (values stored encrypted in Cloudflare — never committed to VCS)
-# Deploy with:
-#   wrangler secret put WHOP_API_KEY
+# After deploying, set the Whop API key with:
+#   npx wrangler secret put WHOP_API_KEY
 # ---------------------------------------------------------------------------
-[[secrets]]
-name = "WHOP_API_KEY"
 
 # ---------------------------------------------------------------------------
 # Optional: preview / staging environment
