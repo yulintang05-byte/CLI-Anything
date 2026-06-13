@@ -102,3 +102,9 @@
 assets/gen_typing_gif.py
 !README_CN.md
 !opencode-commands/
+
+# never commit real credentials
+hermes-infra/marketing/.env
+hermes-infra/marketing/.venv/
+hermes-infra/marketing/__pycache__/
+hermes-infra/marketing/agents/__pycache__/
