@@ -26,4 +26,25 @@ LICENSE_API_URL = os.getenv(
 )
 WHOP_URL = os.getenv("HERMES_WHOP_URL", "https://hermes-landing-c2k.pages.dev")
 INSTALL_CMD = f'curl -fsSL {PRODUCT_URL}/install.sh | bash'
+
+# Whop plan IDs — fill these from the Whop dashboard (⋮ → Details → plan_…).
+# Set them here or via env vars. While a plan ID is empty, checkout_url() falls
+# back to the product landing page, so marketing links never 404.
+WHOP_PLAN_FREE = os.getenv("HERMES_WHOP_PLAN_FREE", "")
+WHOP_PLAN_PRO = os.getenv("HERMES_WHOP_PLAN_PRO", "")
+WHOP_PLAN_ULTRA = os.getenv("HERMES_WHOP_PLAN_ULTRA", "")
+
+
+def checkout_url(plan_id: str) -> str:
+    """Return a Whop checkout link for a plan ID, or the landing page if unset."""
+    if plan_id.startswith("plan_"):
+        return f"https://whop.com/checkout/{plan_id}"
+    return WHOP_URL
+
+
+# Convenience: per-tier buy links for marketing agents to reference.
+CHECKOUT_FREE = checkout_url(WHOP_PLAN_FREE)
+CHECKOUT_PRO = checkout_url(WHOP_PLAN_PRO)
+CHECKOUT_ULTRA = checkout_url(WHOP_PLAN_ULTRA)
+
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")

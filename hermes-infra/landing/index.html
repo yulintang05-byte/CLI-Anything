@@ -53,8 +53,8 @@
   </div>
 
   <div class="cta">
-    <a class="btn-primary" href="https://github.com/yulintang05-byte/cli-anything">Get Pro — $12/mo</a>
-    <a class="btn-secondary" href="https://github.com/yulintang05-byte/cli-anything">14-day free trial</a>
+    <a class="btn-primary" data-tier="pro" href="https://github.com/yulintang05-byte/cli-anything">Get Pro — $12/mo</a>
+    <a class="btn-secondary" data-tier="free" href="https://github.com/yulintang05-byte/cli-anything">14-day free trial</a>
   </div>
 </div>
 
@@ -103,7 +103,7 @@
       <li>Basic tools</li>
       <li>Single device</li>
     </ul>
-    <a class="plan-cta" href="https://github.com/yulintang05-byte/cli-anything" style="border:1px solid #333;color:#888">Start free trial</a>
+    <a class="plan-cta" data-tier="free" href="https://github.com/yulintang05-byte/cli-anything" style="border:1px solid #333;color:#888">Start free trial</a>
   </div>
   <div class="plan featured">
     <div class="plan-name">Pro</div>
@@ -117,7 +117,7 @@
       <li>Custom system prompts</li>
       <li>3 devices</li>
     </ul>
-    <a class="plan-cta" href="https://github.com/yulintang05-byte/cli-anything">Get Pro</a>
+    <a class="plan-cta" data-tier="pro" href="https://github.com/yulintang05-byte/cli-anything">Get Pro</a>
   </div>
   <div class="plan">
     <div class="plan-name">Ultra</div>
@@ -131,13 +131,38 @@
       <li>Unlimited devices</li>
       <li>Priority support</li>
     </ul>
-    <a class="plan-cta" href="https://github.com/yulintang05-byte/cli-anything" style="border:1px solid #333;color:#888">Get Ultra</a>
+    <a class="plan-cta" data-tier="ultra" href="https://github.com/yulintang05-byte/cli-anything" style="border:1px solid #333;color:#888">Get Ultra</a>
   </div>
 </div>
 
 <footer>
-  <p>Hermes &copy; 2025 &nbsp;·&nbsp; <a href="https://github.com/yulintang05-byte/cli-anything">Buy</a> &nbsp;·&nbsp; <a href="https://github.com/yulintang05-byte/cli-anything">GitHub</a></p>
+  <p>Hermes &copy; 2025 &nbsp;·&nbsp; <a data-tier="pro" href="https://github.com/yulintang05-byte/cli-anything">Buy</a> &nbsp;·&nbsp; <a href="https://github.com/yulintang05-byte/cli-anything">GitHub</a></p>
 </footer>
+
+<script>
+  // ───────────────────────────────────────────────────────────────────────
+  // Whop checkout configuration
+  // ───────────────────────────────────────────────────────────────────────
+  // Paste your three real plan IDs below. Find each one in the Whop dashboard:
+  //   ⋮ (three dots) on a pricing option → Details → click the plan_… value.
+  //
+  // SAFE BY DEFAULT: while a value is still a placeholder (does not start with
+  // "plan_"), that button keeps its current href, so nothing breaks. As soon as
+  // a real plan_… ID is filled in, the matching buttons become live Whop
+  // checkout links automatically.
+  const WHOP_PLANS = {
+    free:  "REPLACE_WITH_FREE_PLAN_ID",
+    pro:   "REPLACE_WITH_PRO_PLAN_ID",
+    ultra: "REPLACE_WITH_ULTRA_PLAN_ID",
+  };
+
+  document.querySelectorAll("a[data-tier]").forEach((el) => {
+    const planId = WHOP_PLANS[el.dataset.tier];
+    if (planId && planId.indexOf("plan_") === 0) {
+      el.href = "https://whop.com/checkout/" + planId;
+    }
+  });
+</script>
 
 </body>
 </html>
