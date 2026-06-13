@@ -20,7 +20,10 @@ MAX_TOKENS = int(os.getenv("HERMES_MARKETING_MAX_TOKENS", "8192"))
 
 PRODUCT_NAME = "Hermes"
 PRODUCT_TAGLINE = "The terminal Claude deserves."
-PRODUCT_URL = "https://hermes.sh"
-WHOP_URL = "https://whop.com/hermes"
-INSTALL_CMD = 'curl -fsSL https://hermes.sh/install.sh | bash'
+PRODUCT_URL = os.getenv("HERMES_PRODUCT_URL", "https://hermes-landing-c2k.pages.dev")
+LICENSE_API_URL = os.getenv(
+    "HERMES_LICENSE_API_URL", "https://hermes-license-proxy.luckylefty.workers.dev"
+)
+WHOP_URL = os.getenv("HERMES_WHOP_URL", "https://hermes-landing-c2k.pages.dev")
+INSTALL_CMD = f'curl -fsSL {PRODUCT_URL}/install.sh | bash'
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
