@@ -148,6 +148,11 @@ from modules.obsidian_sync import (
 )
 from modules.email_sender import queue_deal_outreach, email_status
 from modules.agent_offer import send_agent_offer
+from modules.dispo import (
+    build_pitch as dispo_build_pitch, fire_blast as dispo_fire,
+    preflight as dispo_preflight, load_deals as dispo_load_deals,
+    save_deal as dispo_save_deal, matched_buyers as dispo_matched_buyers,
+)
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -316,7 +321,8 @@ def main_menu():
             "  [bold cyan][39][/bold cyan] [bold]Market Intelligence[/bold] — Score & compare 17 markets\n"
             "  [bold cyan][40][/bold cyan] Appreciation Projector — Future value by market\n"
             "  [bold cyan][41][/bold cyan] [bold]Property Management Finder[/bold] — Local + national PMs by market\n"
-            "  [bold cyan][42][/bold cyan] [bold]BRRRR HML Trigger[/bold] — Auto-match hard money lenders when deal qualifies\n\n"
+            "  [bold cyan][42][/bold cyan] [bold]BRRRR HML Trigger[/bold] — Auto-match hard money lenders when deal qualifies\n"
+            "  [bold cyan][43][/bold cyan] [bold]DISPO BLAST[/bold] — Sell a locked deal to your cash-buyer bench (1 command)\n\n"
 
             "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
@@ -330,7 +336,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -418,6 +424,8 @@ def main_menu():
             menu_property_mgmt()
         elif choice == "42":
             menu_brrrr_hml()
+        elif choice == "43":
+            menu_dispo_blast()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -4881,6 +4889,102 @@ def _check_ai_key():
             title="⚠  AI Key Needed",
             border_style="yellow",
         ))
+
+
+# ── 43. Dispo Blast ────────────────────────────────────────────────────────────
+
+def menu_dispo_blast():
+    section("DISPO BLAST — SELL A LOCKED DEAL TO YOUR BUYER BENCH")
+    console.print(
+        "[dim]The moment you have a deal under contract (assignable), blast every "
+        "cash buyer on your bench. First verified proof-of-funds takes it. "
+        "Preview first — nothing sends until you confirm.[/dim]\n"
+    )
+
+    deals = dispo_load_deals()
+    deal = None
+
+    if deals:
+        console.print("[bold]Saved deals:[/bold]")
+        for i, d in enumerate(deals, 1):
+            console.print(f"  [cyan]{i}.[/cyan] {d.get('address','?')}  "
+                          f"[dim]${d.get('all_in',0):,} all-in · ARV ${d.get('arv',0):,}[/dim]")
+        console.print(f"  [cyan]{len(deals)+1}.[/cyan] Enter a new deal")
+        pick = IntPrompt.ask("Pick a deal", default=1)
+        if 1 <= pick <= len(deals):
+            deal = deals[pick - 1]
+
+    if deal is None:
+        console.print("\n[bold]New deal — enter the locked numbers:[/bold]")
+        deal = {
+            "address":    Prompt.ask("Address (Street, City ST ZIP)"),
+            "all_in":     IntPrompt.ask("All-in price to buyer (contract + your fee)"),
+            "beds":       IntPrompt.ask("Beds", default=3),
+            "baths":      IntPrompt.ask("Baths", default=2),
+            "sqft":       IntPrompt.ask("Sqft", default=1200),
+            "year":       Prompt.ask("Year built", default=""),
+            "arv":        IntPrompt.ask("ARV (conservative)"),
+            "comps":      Prompt.ask("Comps (one line, optional)", default=""),
+            "rehab_low":  IntPrompt.ask("Rehab estimate low", default=0),
+            "rehab_high": IntPrompt.ask("Rehab estimate high", default=0),
+            "emd":        IntPrompt.ask("EMD on assignment", default=5000),
+            "close_days": IntPrompt.ask("Close in N days", default=14),
+            "state":      Prompt.ask("State (2-letter, for buyer match)", default="MI").upper(),
+            "highlights": Prompt.ask("Highlights (roof, vacant, etc.)", default=""),
+        }
+        dispo_save_deal(deal)
+        console.print("[green]✓ Deal saved — it'll be in the list next time.[/green]")
+
+    # Preview (sends nothing)
+    res = dispo_fire(deal, send=False)
+    pf  = res["preflight"]
+
+    console.print(Panel(
+        f"  Provider:       {pf['provider']}" + ("" if pf["configured"] else "  [red]✗ not configured[/red]") + "\n"
+        f"  Verified sender:{' ' + pf['sender'] if pf['sender'] else ' [red]✗ EMAIL_FROM not set[/red]'}\n"
+        f"  Buyers matched: [bold]{pf['buyers_total']}[/bold]  "
+        f"([green]{pf['emailable']} emailable[/green], {pf['phone_only']} phone-only)\n"
+        f"  Status:         {'[bold green]✓ READY TO FIRE[/bold green]' if pf['ok'] else '[bold red]✗ FIX ABOVE FIRST[/bold red]'}",
+        title="[bold cyan]PREFLIGHT[/bold cyan]",
+        border_style="green" if pf["ok"] else "red",
+    ))
+
+    console.print(Panel(
+        f"[bold]SUBJECT:[/bold] {res['subject']}\n\n{res['body']}",
+        title="[bold green]EMAIL THAT GOES OUT[/bold green]",
+        border_style="green",
+    ))
+
+    if res["would_email"]:
+        console.print("[bold]Would email:[/bold]")
+        for b in res["would_email"]:
+            console.print(f"  • {b.get('name','?')} <{b.get('email')}>")
+    if res["phone_only"]:
+        console.print("\n[bold yellow]Phone-only (copy-paste SMS below):[/bold yellow]")
+        for b in res["phone_only"]:
+            console.print(f"  • {b.get('name','?')} — {b.get('phone','?')}")
+        console.print(f"\n  [dim]{res['sms']}[/dim]")
+
+    if not pf["ok"]:
+        console.print("\n[yellow]Not ready to send. Fix the preflight items, then re-run.[/yellow]")
+        press_enter()
+        return
+
+    console.print()
+    if Confirm.ask(f"[bold red]FIRE for real to {pf['emailable']} buyer(s)?[/bold red]", default=False):
+        out = dispo_fire(deal, send=True)
+        console.print(Panel(
+            f"  [bold green]✓ {out['emailed']} emailed[/bold green]"
+            + (f"   [red]{out['failed']} failed[/red]" if out["failed"] else "")
+            + f"   {len(out['phone_only'])} phone-only\n"
+            + ("  [yellow]⚠ Some sends failed — check SendGrid key/credits/sender.[/yellow]\n" if out["failed"] else "")
+            + "  First verified proof-of-funds locks it. Reply scripts: option 26 → 4.",
+            title="[bold green]🚀 DISPO BLAST SENT[/bold green]",
+            border_style="green",
+        ))
+    else:
+        console.print("[dim]Held — nothing sent.[/dim]")
+    press_enter()
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────

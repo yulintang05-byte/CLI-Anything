@@ -185,6 +185,21 @@ Key menu options:
 - **37** — Rehab estimator (real repair numbers)
 - **41** — Property management finder
 - **42** — BRRRR HML auto-trigger
+- **43** — Dispo Blast (sell a locked deal to the buyer bench — preview, then confirm to fire)
+
+### Dispo — the proven lever (off-market / co-wholesale)
+
+Live data (Irving session, 1,628 MLS listings → 0 real deals) proved MLS has
+no assignable margin. Off-market/co-wholesale is the channel. Our asset is the
+buyer bench; dispo (finding the buyer for a locked deal) is fully in our control.
+
+- `modules/dispo.py` — `fire_blast(deal, send=False)` previews; `send=True` fires
+  after preflight (provider + verified sender + matched buyers). Deals persist in
+  `~/.wholesale-ai/dispo_deals.json`; Baldwin is seeded.
+- `dispo_blast_baldwin.py` — dedicated Baldwin tool. Preview by default; `--send`
+  to fire. We are BACKUP position — only fire once the PSA is signed in our name.
+- Reply-to/sender come from the profile (`albert143rd@gmail.com`); override with
+  `DISPO_REPLY_TO`. SendGrid needs a verified `EMAIL_FROM`.
 
 ---
 
