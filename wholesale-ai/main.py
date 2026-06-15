@@ -147,6 +147,7 @@ from modules.obsidian_sync import (
     export_deal_to_obsidian, export_pipeline_digest_to_obsidian, vault_status,
 )
 from modules.email_sender import queue_deal_outreach, email_status
+from modules.agent_offer import send_agent_offer
 from agents.runner import AgentRunner
 from agents.memory import get_stats as agent_stats
 
@@ -824,6 +825,57 @@ def _auto_generate_contract(lead: dict):
         f"  [bold yellow]ALBERTO'S ONLY JOB:[/bold yellow] Open the file above and sign line 208.",
         title="[bold green]3. CONTRACT — READY TO SIGN[/bold green]",
         border_style="green",
+    ))
+
+
+def _auto_send_agent_offer(lead: dict):
+    """
+    LEGAL outreach: email a cash Letter of Intent to the LISTING AGENT.
+
+    This is the hands-off path to deal #1 — contacting the listing agent with
+    a written cash offer is normal business contact (not TCPA-restricted cold
+    homeowner contact). Fires automatically on real HIGH MARGIN deals. If no
+    agent email or email provider is set, the LOI is still saved to disk so
+    Alberto can send it in one paste.
+    """
+    profile  = load_profile()
+    analysis = lead.get("full_analysis", {})
+    mao = (analysis.get("flip", {}).get("mao", 0)
+           or lead.get("price", 0))
+    if mao <= 0:
+        return
+
+    result = send_agent_offer(lead, mao=mao, profile=profile, auto_send=True)
+
+    if result["sent"]:
+        body = (
+            f"  [bold green]✓ Cash offer EMAILED to listing agent[/bold green]\n"
+            f"  To: [cyan]{result['to_name'] or 'Listing Agent'}[/cyan] <{result['to_email']}>\n"
+            f"  Opening: [bold green]${result['opening_offer']:,.0f}[/bold green]   "
+            f"Walk-away ceiling: [yellow]${result['walk_away']:,.0f}[/yellow]\n\n"
+            f"  [dim]When the agent replies, run option 26 → 4 for the negotiation script.[/dim]"
+        )
+        border = "green"
+    else:
+        body = (
+            f"  [yellow]Offer NOT auto-sent — {result['reason']}.[/yellow]\n"
+            f"  Saved ready-to-send: [cyan]{result['saved_to']}[/cyan]\n"
+            f"  Opening: [bold]${result['opening_offer']:,.0f}[/bold]   "
+            f"Walk-away ceiling: ${result['walk_away']:,.0f}\n"
+        )
+        if result["to_email"]:
+            body += f"  [bold yellow]ONE STEP:[/bold yellow] paste that file's body to {result['to_email']}.\n"
+        else:
+            body += (
+                "  [bold yellow]ONE STEP:[/bold yellow] this listing has no agent email — "
+                "open the RentCast/Zillow link, copy the agent's email, paste the offer.\n"
+            )
+        border = "yellow"
+
+    console.print(Panel(
+        body,
+        title="[bold green]4. CASH OFFER → LISTING AGENT (legal, hands-off)[/bold green]",
+        border_style=border,
     ))
 
 
@@ -2538,6 +2590,7 @@ def menu_live_leads():
                 continue
             _one_click_close_package(lead)
             _auto_generate_contract(lead)
+            _auto_send_agent_offer(lead)
     elif analyzed:
         console.print(f"\n[cyan]{len(analyzed)} analyzed leads:[/cyan]\n")
         t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)

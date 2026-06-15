@@ -114,6 +114,35 @@ Deal notes land at: `~/obsidian-claude-pkm/Wholesale Deals/YYYY-MM/Address.md`
 
 ---
 
+## Outreach — LEGAL Channel Only (TCPA)
+
+Cold robo-texting / robo-calling **homeowners** violates the TCPA
+($500–$1,500 per message). The app must NEVER auto-cold-contact a homeowner.
+
+The legal, automated channel is the **listing agent**: contacting an agent
+with a written cash offer is normal business contact. The auto-offer engine
+fires only on real HIGH MARGIN listed deals:
+
+```python
+from modules.agent_offer import send_agent_offer
+send_agent_offer(lead, mao=mao, auto_send=True)
+```
+
+- Listing-agent contact is pulled from RentCast (`agent_email`/`agent_phone`)
+  in `modules/rentcast.py` and mirrored to `seller_email`/`seller_name`.
+- The LOI opens at 90% of MAO (room to negotiate); MAO is the walk-away ceiling
+  so the assignment fee is always protected.
+- If no agent email or no email provider (SendGrid/SMTP), the LOI is saved to
+  `~/.wholesale-ai/offers/` so Alberto sends it in one paste.
+- Wired into the scan as step 4 (`_auto_send_agent_offer` in `main.py`),
+  AFTER the DLBA/link-only skip and the data-warning hold — never fires on a
+  phantom or unverified-ARV deal.
+
+SMS scripts and the ElevenLabs voicemail MP3 are for **warm/inbound** replies
+or for Alberto to send/play himself — not for automated cold blasting.
+
+---
+
 ## Phantom Deal Filters — Never Remove These
 
 Three layers stop bad data from reaching Alberto:

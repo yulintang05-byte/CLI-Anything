@@ -156,6 +156,15 @@ def search_sale_listings(
         # never score them as a wholesale deal or generate outreach.
         is_dlba = _is_land_bank_listing(item)
 
+        # Listing agent / office contact — this is the LEGAL outreach target.
+        # Contacting the listing agent with a cash offer is normal business
+        # (unlike cold-contacting the homeowner, which is TCPA-restricted).
+        agent      = item.get("listingAgent") or {}
+        office     = item.get("listingOffice") or {}
+        agent_name  = agent.get("name") or office.get("name") or ""
+        agent_email = agent.get("email") or office.get("email") or ""
+        agent_phone = agent.get("phone") or office.get("phone") or ""
+
         lead = {
             "title":            addr,
             "price":            float(price),
@@ -179,6 +188,13 @@ def search_sale_listings(
             "address_for_avm":  item.get("formattedAddress") or addr,
             "raw_text":         raw_text,
             "distress_signals": signals,
+            # Listing-agent contact — the legal outreach channel.
+            "agent_name":       agent_name,
+            "agent_email":      agent_email,
+            "agent_phone":      agent_phone,
+            # Mirror into seller_email so the existing auto-send path can use it.
+            "seller_email":     agent_email,
+            "seller_name":      agent_name,
         }
         if is_dlba:
             lead["is_link_only"]   = True
