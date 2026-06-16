@@ -23,6 +23,7 @@
 # Step 3: Allow cli-anything-plugin entirely
 !/cli-anything-plugin/
 !/codex-skill/
+!/wholesale-ai/
 
 # Step 4: Allow each software dir (top level only)
 !/gimp/
@@ -102,3 +103,7 @@
 assets/gen_typing_gif.py
 !README_CN.md
 !opencode-commands/
+
+# Wholesale AI generated preview artifacts
+wholesale-ai/preview.svg
+wholesale-ai/preview.png

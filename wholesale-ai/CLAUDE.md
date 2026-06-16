@@ -1,0 +1,248 @@
+# CLAUDE.md — Wholesale AI Session Instructions
+
+> Read this file at the start of EVERY session. No exceptions.
+> Alberto does not re-explain context. You pick up where you left off.
+
+---
+
+## Who Alberto Is
+
+Real estate wholesaler. Runs the Midwest + growing nationally.
+**Alberto's only job: read the deal and sign the contract.**
+Everything else — finding deals, running numbers, writing outreach, drafting contracts, matching buyers, setting up lenders — is your job.
+
+---
+
+## How to Start Every Session
+
+1. Check `git log --oneline -5` to see what was last committed
+2. Check `wholesale-ai/modules/pipeline.py` for active deals in the pipeline
+3. If Alberto pastes app output, analyze it immediately — don't ask what he wants
+4. If a deal shows `HIGH MARGIN`, verify it's not a phantom before generating outreach
+
+---
+
+## The Workflow (Never Deviate)
+
+```
+SCAN [23]  →  verify deal is real  →  generate close package
+→  Alberto sends SMS (one tap)  →  negotiation scripts on reply
+→  contract drafted  →  Alberto signs  →  assign to buyer  →  collect fee
+```
+
+Alberto never types scripts. You write them word-for-word, copy-paste ready.
+Alberto never runs numbers. You run them with 4 strategies (Flip/BRRRR/DSCR/Section 8).
+Alberto never cold calls. ElevenLabs speaks the script. (See voice module below.)
+
+---
+
+## API Keys — SECURITY PROTOCOL
+
+Keys are stored in Alberto's Mem.ai notes app.
+**NEVER ask Alberto to paste a key in chat.**
+**NEVER commit a key to git.**
+
+To get a key, use the Mem.ai MCP tool:
+```python
+mcp__d85c7d0c-7b5f-43fa-8677-93a396cd23be__search_notes(query="rentcast api key")
+mcp__d85c7d0c-7b5f-43fa-8677-93a396cd23be__search_notes(query="anthropic api key")
+mcp__d85c7d0c-7b5f-43fa-8677-93a396cd23be__search_notes(query="elevenlabs api key")
+mcp__d85c7d0c-7b5f-43fa-8677-93a396cd23be__search_notes(query="email smtp password")
+```
+
+Write retrieved keys to `wholesale-ai/.env` only. `.env` is gitignored.
+
+---
+
+## Connected Services
+
+| Service | Purpose | Key location | Module |
+|---------|---------|--------------|--------|
+| Anthropic Claude | AI deal analysis | Mem.ai notes | `modules/ai_advisor.py` |
+| RentCast | Live listings + ARV + rent | Mem.ai notes | `modules/rentcast.py` |
+| ElevenLabs | Voice outreach (voicemails + calls) | Mem.ai notes | `modules/elevenlabs_voice.py` |
+| Email (SMTP/SendGrid) | Automated outreach emails | Mem.ai notes | `modules/email_sender.py` |
+| Obsidian | Deal notes vault sync | Vault path in .env | `modules/obsidian_sync.py` |
+| HUD API | Fair Market Rent data | Mem.ai notes | `modules/hud_search.py` |
+| ATTOM | Deep property data | Mem.ai notes | (optional enrichment) |
+
+---
+
+## ElevenLabs Voice Integration
+
+When a close package is generated, also produce audio:
+
+```python
+from modules.elevenlabs_voice import speak_script
+speak_script(script_text, output_path="voicemail_3240_Glynn.mp3")
+```
+
+ElevenLabs speaks the voicemail script in a professional male voice.
+Alberto plays the MP3 when the seller picks up, or drops it as a voicemail.
+Key env var: `ELEVENLABS_API_KEY`
+Voice ID env var: `ELEVENLABS_VOICE_ID` (default: Roger — in Alberto's account; malformed values auto-ignored)
+
+---
+
+## Email Integration
+
+When a close package is generated, queue the outreach email automatically:
+
+```python
+from modules.email_sender import send_outreach_email
+send_outreach_email(to_email, subject, body, from_name="Alberto Soriano")
+```
+
+Env vars needed: `EMAIL_FROM`, `EMAIL_PASSWORD`, `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`
+OR: `SENDGRID_API_KEY` (preferred — no SMTP config needed)
+
+---
+
+## Obsidian Vault Sync
+
+Every deal card and pipeline entry gets exported as a markdown note:
+
+```python
+from modules.obsidian_sync import export_deal_to_obsidian
+export_deal_to_obsidian(deal_data, address)
+```
+
+Files land in: `$OBSIDIAN_VAULT_PATH/Wholesale Deals/YYYY-MM/address.md`
+Alberto opens Obsidian and sees every deal in his vault automatically.
+Env var: `OBSIDIAN_VAULT_PATH` — Alberto's vault is at `~/obsidian-claude-pkm`
+Deal notes land at: `~/obsidian-claude-pkm/Wholesale Deals/YYYY-MM/Address.md`
+
+---
+
+## Outreach — LEGAL Channel Only (TCPA)
+
+Cold robo-texting / robo-calling **homeowners** violates the TCPA
+($500–$1,500 per message). The app must NEVER auto-cold-contact a homeowner.
+
+The legal, automated channel is the **listing agent**: contacting an agent
+with a written cash offer is normal business contact. The auto-offer engine
+fires only on real HIGH MARGIN listed deals:
+
+```python
+from modules.agent_offer import send_agent_offer
+send_agent_offer(lead, mao=mao, auto_send=True)
+```
+
+- Listing-agent contact is pulled from RentCast (`agent_email`/`agent_phone`)
+  in `modules/rentcast.py` and mirrored to `seller_email`/`seller_name`.
+- The LOI opens at 90% of MAO (room to negotiate); MAO is the walk-away ceiling
+  so the assignment fee is always protected.
+- If no agent email or no email provider (SendGrid/SMTP), the LOI is saved to
+  `~/.wholesale-ai/offers/` so Alberto sends it in one paste.
+- Wired into the scan as step 4 (`_auto_send_agent_offer` in `main.py`),
+  AFTER the DLBA/link-only skip and the data-warning hold — never fires on a
+  phantom or unverified-ARV deal.
+
+SMS scripts and the ElevenLabs voicemail MP3 are for **warm/inbound** replies
+or for Alberto to send/play himself — not for automated cold blasting.
+
+---
+
+## Phantom Deal Filters — Never Remove These
+
+Three layers stop bad data from reaching Alberto:
+
+| Layer | File | What it stops |
+|-------|------|---------------|
+| Source | `modules/rentcast.py` | Vacant lots (0 beds/0 sqft), DLBA infill parcels |
+| Source | `modules/rentcast.py` | DLBA-owned houses (`_is_land_bank_listing`) → `is_link_only` |
+| Agent | `agents/lead_agent.py` | `_looks_like_land()` backstop, `_is_dlba_house()` backstop |
+| Agent | `agents/lead_agent.py` | AVM yield > 25% gross → revert to market rent |
+| Display | `main.py` | Yellow `⚠ VERIFY BEFORE YOU ACT` panel on any `data_warning` |
+| Portal | `modules/web_scraper.py` | DLBA portal entries → `is_link_only=True, price=0` |
+
+**Never** generate outreach for a lead with `is_link_only=True` or `status=link_only`.
+
+---
+
+## Current Branch
+
+```
+git branch: claude/real-estate-wholesale-ai-mHOW0
+git push target: origin claude/real-estate-wholesale-ai-mHOW0
+```
+
+Always develop and push to this branch. Never push to main without Alberto's permission.
+
+---
+
+## How to Run the App
+
+```bash
+cd ~/CLI-Anything/wholesale-ai
+python3 main.py
+```
+
+Key menu options:
+- **23** — Live Lead Scan (the main event — run this daily)
+- **26** — Pipeline manager (active deals)
+- **35** — Comp validator (verify ARV before sending offer)
+- **37** — Rehab estimator (real repair numbers)
+- **41** — Property management finder
+- **42** — BRRRR HML auto-trigger
+- **43** — Dispo Blast (sell a locked deal to the buyer bench — preview, then confirm to fire)
+- **44** — Cash-Flow Deal Hunter (live multi-market hunt, scores FLIP *and* LANDLORD math)
+
+### Deal sourcing — flip OR landlord (the rental-market fix)
+
+The original `deal_hunter.py` only scored fix-and-flip math
+(`0.70×ARV − repairs − price ≥ $5k`). In Detroit/Midwest — which are **rental**
+markets, not flip markets — that filter returns ~0 (Irving's scan: 1,628 → 0).
+A $40k house renting Section 8 at $1,200/mo is a real wholesale-to-landlord deal
+even when the flip spread is thin.
+
+`agents/deal_hunter.py` now scores **both exits** and a listing passes if EITHER
+clears the $5k gate:
+
+- **Flip path** — the 70% rule (unchanged).
+- **Landlord path** (`_landlord_eval`) — conservative Section-8 rent (`RENT_FMR`),
+  real carrying costs (per-state property tax + insurance + 31% of gross to
+  vacancy/maintenance/management/capex), and a buyer-required cap rate by region
+  (`REQ_CAP`: Midwest 10% / South 9% / FL 7%). The fee room = the most a landlord
+  can pay (incl. our fee) at their required yield, minus rehab and price.
+
+Honesty rails (never weaken these — they stop fake deals): rents are the
+Section-8 floor not optimistic market rent; rehab is the same scope-based estimate
+as the flip path (conservative); a fee over $40k gets a `VERIFY` flag. Candidates
+carry `deal_type` (flip / landlord / both), `best_fee`, and the full landlord
+metrics. Run it from the app: **option 44**. It can also fire a legal cash LOI to
+a listing agent on a winner (reuses `agent_offer.send_agent_offer`).
+
+### Dispo — the proven lever (off-market / co-wholesale)
+
+Live data (Irving session, 1,628 MLS listings → 0 real deals) proved MLS has
+no assignable margin. Off-market/co-wholesale is the channel. Our asset is the
+buyer bench; dispo (finding the buyer for a locked deal) is fully in our control.
+
+- `modules/dispo.py` — `fire_blast(deal, send=False)` previews; `send=True` fires
+  after preflight (provider + verified sender + matched buyers). Deals persist in
+  `~/.wholesale-ai/dispo_deals.json`; Baldwin is seeded.
+- `dispo_blast_baldwin.py` — dedicated Baldwin tool. Preview by default; `--send`
+  to fire. We are BACKUP position — only fire once the PSA is signed in our name.
+- Reply-to/sender come from the profile (`albert143rd@gmail.com`); override with
+  `DISPO_REPLY_TO`. SendGrid needs a verified `EMAIL_FROM`.
+
+---
+
+## When a Deal Comes Up — Your Checklist
+
+1. **Is it real?** — WebSearch the address. Confirm beds/baths/photos exist. Not a DLBA listing.
+2. **Are the numbers right?** — ARV via option [35]. Rehab via option [37]. Don't use flat $20k default.
+3. **Generate the package** — SMS + call script + email + voicemail MP3 + buyer pitch
+4. **Export to Obsidian** — so Alberto has it in his vault
+5. **Hand Alberto one action** — "Send this SMS:" followed by the exact text. Nothing else.
+
+---
+
+## Things You Never Do
+
+- Never tell Alberto to "check the numbers" — you check them
+- Never generate outreach for a DLBA / link_only lead
+- Never commit `.env` or any file containing real API keys
+- Never push to a branch other than the one above without asking
+- Never ask Alberto to explain context — read this file instead
