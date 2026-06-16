@@ -322,7 +322,8 @@ def main_menu():
             "  [bold cyan][40][/bold cyan] Appreciation Projector — Future value by market\n"
             "  [bold cyan][41][/bold cyan] [bold]Property Management Finder[/bold] — Local + national PMs by market\n"
             "  [bold cyan][42][/bold cyan] [bold]BRRRR HML Trigger[/bold] — Auto-match hard money lenders when deal qualifies\n"
-            "  [bold cyan][43][/bold cyan] [bold]DISPO BLAST[/bold] — Sell a locked deal to your cash-buyer bench (1 command)\n\n"
+            "  [bold cyan][43][/bold cyan] [bold]DISPO BLAST[/bold] — Sell a locked deal to your cash-buyer bench (1 command)\n"
+            "  [bold cyan][44][/bold cyan] [bold]CASH-FLOW DEAL HUNTER[/bold] — Flip OR landlord math, all markets, live\n\n"
 
             "  [bold green]── SETTINGS ────────────────────────────────────────────────[/bold green]\n"
             "  [bold cyan][28][/bold cyan] My Investor Profile (credit score, cash, targets)\n"
@@ -336,7 +337,7 @@ def main_menu():
             border_style="green",
         ))
 
-        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43"]
+        valid = [str(i) for i in range(22)] + ["23","24","25","26","27","28","29","30","31","32","33","34","35","36","37","38","39","40","41","42","43","44"]
         choice = Prompt.ask("[bold]Select[/bold]", choices=valid)
 
         if choice == "0":
@@ -426,6 +427,8 @@ def main_menu():
             menu_brrrr_hml()
         elif choice == "43":
             menu_dispo_blast()
+        elif choice == "44":
+            menu_deal_hunter()
 
 
 # ── 1. Browse Deals ──────────────────────────────────────────────────────────
@@ -4984,6 +4987,130 @@ def menu_dispo_blast():
         ))
     else:
         console.print("[dim]Held — nothing sent.[/dim]")
+    press_enter()
+
+
+# ── 44. Cash-Flow Deal Hunter ──────────────────────────────────────────────────
+
+def menu_deal_hunter():
+    section("CASH-FLOW DEAL HUNTER — FLIP *OR* LANDLORD MATH")
+    console.print(
+        "[dim]Pulls live RentCast listings across your markets and scores each on BOTH "
+        "exits: fix-and-flip (70% rule) AND buy-and-hold (Section-8 cash flow). "
+        "Detroit/Midwest are rental markets — this catches the cash-flow deals the "
+        "flip-only scan throws away. Honest gates: real rehab, real taxes + insurance.[/dim]\n"
+    )
+
+    if not os.getenv("RENTCAST_API_KEY"):
+        console.print(Panel(
+            "[yellow]No RENTCAST_API_KEY in .env.[/yellow]\n"
+            "This hunt needs the live RentCast feed. Add your key to "
+            "[bold]wholesale-ai/.env[/bold] (option 21 → Setup), then re-run.\n"
+            "[dim]Free tier: 50 calls/month at app.rentcast.io[/dim]",
+            title="[bold red]LIVE FEED NOT CONFIGURED[/bold red]", border_style="red",
+        ))
+        press_enter()
+        return
+
+    from agents.deal_hunter import hunt as deal_hunt, MARKETS, MIN_FEE
+
+    console.print(f"[bold green]Scanning {len(MARKETS)} markets live...[/bold green] "
+                  "[dim](one API call per market; ~10-20s)[/dim]\n")
+    with console.status("[bold green]Hunting deals across all markets...", spinner="dots"):
+        result = deal_hunt()
+
+    cands = result.get("candidates", [])
+    console.print(Panel(
+        f"  Listings pulled:  [bold cyan]{result['listings_pulled']}[/bold cyan]\n"
+        f"  Pass the gate:    [bold green]{result['candidates_passing_gate']}[/bold green]  "
+        f"([cyan]{result.get('flip_candidates', 0)} flip[/cyan] / "
+        f"[magenta]{result.get('landlord_candidates', 0)} landlord[/magenta])\n"
+        f"  Min fee gate:     ${result['min_fee_gate']:,}\n"
+        f"  Saved to:         output/deal_candidates.json",
+        title="[bold green]HUNT COMPLETE[/bold green]", border_style="green",
+    ))
+    if result.get("market_log"):
+        console.print("[dim]" + "  |  ".join(result["market_log"][:8]) + "[/dim]\n")
+
+    if not cands:
+        console.print("[yellow]No deals cleared the gate this run. The MLS is thin — "
+                      "that's normal. Re-run tomorrow for new listings, or widen the "
+                      "markets in agents/deal_hunter.py.[/yellow]")
+        press_enter()
+        return
+
+    t = Table(show_header=True, header_style="bold cyan", box=box.ROUNDED)
+    t.add_column("#", justify="right")
+    t.add_column("Type")
+    t.add_column("Fee", justify="right")
+    t.add_column("Address", max_width=34)
+    t.add_column("Ask", justify="right")
+    t.add_column("Rent", justify="right")
+    t.add_column("Cap", justify="right")
+    t.add_column("Agent")
+    for i, c in enumerate(cands[:15], 1):
+        dt = c["deal_type"]
+        color = "green" if dt == "both" else "magenta" if dt == "landlord" else "cyan"
+        rent = f"${c['monthly_rent']:,}" if c.get("monthly_rent") else "—"
+        cap  = f"{c['cap_rate_target']*100:.0f}%" if c.get("cap_rate_target") else "—"
+        agent = "✉" if c.get("agent_email") else ("☎" if c.get("agent_phone") else "—")
+        flag = " ⚠" if c.get("fee_flag") else ""
+        t.add_row(str(i), f"[{color}]{dt}[/{color}]", f"${c['best_fee']:,}{flag}",
+                  c.get("address", "?"), f"${c['price']:,}", rent, cap, agent)
+    console.print(t)
+    console.print("[dim]⚠ = fee looks too good; verify rent/ARV (option 35) before you bank it. "
+                  "✉ = listing-agent email on file (legal outreach channel).[/dim]\n")
+
+    # The one legal, hands-off action: cash LOI to a listing agent.
+    emailable = [c for c in cands[:15] if c.get("agent_email")]
+    if not emailable:
+        console.print("[dim]No listing-agent emails on these candidates — nothing to auto-send. "
+                      "Numbers + agent phones are in the saved JSON above.[/dim]")
+        press_enter()
+        return
+
+    if not Confirm.ask("\nSend a cash LOI to a listing agent now (legal, one email)?", default=False):
+        press_enter()
+        return
+
+    console.print("\n[bold]Candidates with an agent email:[/bold]")
+    for i, c in enumerate(emailable, 1):
+        console.print(f"  [cyan]{i}.[/cyan] {c['address']}  "
+                      f"[dim]{c['deal_type']} · fee ${c['best_fee']:,} · agent {c.get('agent_name', '?')}[/dim]")
+    pick = IntPrompt.ask("Pick one", default=1)
+    if not (1 <= pick <= len(emailable)):
+        press_enter()
+        return
+    c = emailable[pick - 1]
+
+    profile = load_profile()
+    # Our max purchase price that still nets at least the min fee on assignment.
+    mao = max(c["price"], c["price"] + c["best_fee"] - MIN_FEE)
+    res = send_agent_offer(c, mao=mao, profile=profile, auto_send=False)  # preview only
+
+    console.print(Panel(
+        f"[bold]TO:[/bold] {res['to_name'] or 'Listing Agent'} <{res['to_email']}>\n"
+        f"[bold]Opening offer:[/bold] ${res['opening_offer']:,}   "
+        f"[bold]Walk-away (MAO):[/bold] ${res['walk_away']:,}\n\n"
+        f"[bold]SUBJECT:[/bold] {res['subject']}\n\n{res['body']}",
+        title="[bold green]CASH LOI PREVIEW[/bold green]", border_style="green",
+    ))
+
+    if Confirm.ask(f"[bold red]Send this LOI to {res['to_email']}?[/bold red]", default=False):
+        out = send_agent_offer(c, mao=mao, profile=profile, auto_send=True)
+        if out["sent"]:
+            console.print(Panel(
+                f"[bold green]✓ LOI emailed to {out['to_email']}[/bold green]\n"
+                f"Saved: {out['saved_to']}",
+                title="[bold green]OFFER SENT[/bold green]", border_style="green"))
+        else:
+            console.print(Panel(
+                f"[yellow]Not auto-sent: {out['reason']}[/yellow]\n"
+                f"LOI saved to: {out['saved_to']}\n"
+                f"[dim]Open that file and paste it into an email to {out['to_email']}.[/dim]",
+                title="[bold yellow]SAVED — SEND MANUALLY[/bold yellow]", border_style="yellow"))
+    else:
+        console.print(f"[dim]Held — LOI saved to {res['saved_to']}, nothing sent.[/dim]")
     press_enter()
 
 

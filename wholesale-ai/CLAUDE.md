@@ -186,6 +186,32 @@ Key menu options:
 - **41** — Property management finder
 - **42** — BRRRR HML auto-trigger
 - **43** — Dispo Blast (sell a locked deal to the buyer bench — preview, then confirm to fire)
+- **44** — Cash-Flow Deal Hunter (live multi-market hunt, scores FLIP *and* LANDLORD math)
+
+### Deal sourcing — flip OR landlord (the rental-market fix)
+
+The original `deal_hunter.py` only scored fix-and-flip math
+(`0.70×ARV − repairs − price ≥ $5k`). In Detroit/Midwest — which are **rental**
+markets, not flip markets — that filter returns ~0 (Irving's scan: 1,628 → 0).
+A $40k house renting Section 8 at $1,200/mo is a real wholesale-to-landlord deal
+even when the flip spread is thin.
+
+`agents/deal_hunter.py` now scores **both exits** and a listing passes if EITHER
+clears the $5k gate:
+
+- **Flip path** — the 70% rule (unchanged).
+- **Landlord path** (`_landlord_eval`) — conservative Section-8 rent (`RENT_FMR`),
+  real carrying costs (per-state property tax + insurance + 31% of gross to
+  vacancy/maintenance/management/capex), and a buyer-required cap rate by region
+  (`REQ_CAP`: Midwest 10% / South 9% / FL 7%). The fee room = the most a landlord
+  can pay (incl. our fee) at their required yield, minus rehab and price.
+
+Honesty rails (never weaken these — they stop fake deals): rents are the
+Section-8 floor not optimistic market rent; rehab is the same scope-based estimate
+as the flip path (conservative); a fee over $40k gets a `VERIFY` flag. Candidates
+carry `deal_type` (flip / landlord / both), `best_fee`, and the full landlord
+metrics. Run it from the app: **option 44**. It can also fire a legal cash LOI to
+a listing agent on a winner (reuses `agent_offer.send_agent_offer`).
 
 ### Dispo — the proven lever (off-market / co-wholesale)
 

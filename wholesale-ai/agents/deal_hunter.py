@@ -71,9 +71,124 @@ _LANDBANK_FLAGS = ("land bank", "landbank", "buildingdetroit", "own it now",
                    "dlba", "side lot", "bundle", "package deal", "must rehab",
                    "renovation agreement", "compliance period")
 
+# ── LANDLORD / CASH-FLOW GATE ────────────────────────────────────────────────
+# Detroit/Midwest are RENTAL markets, not flip markets. A $40k house renting
+# Section 8 at $1,200/mo is a real wholesale-to-landlord deal even when the flip
+# spread is thin. The flip-only gate threw all of these away (Irving's scan:
+# 1,628 listings -> 0). This second gate catches the cash-flow deals — honestly.
+#
+# Honesty rails (so we never resurrect a fake "deal"):
+#   - Rents are the conservative Section-8-collectable floor (HUD-FMR-style), not
+#     optimistic Zillow market rent.
+#   - Real Detroit-grade carrying costs: high property tax + insurance + 31% of
+#     gross to vacancy/maintenance/management/capex.
+#   - A buyer-required cap rate by region (Midwest C-class demands more than FL).
+#   - Same scope-based rehab as the flip path (conservative; rentals often need
+#     less, so we under-claim our fee, never over-claim).
+
+# Conservative monthly rent by city -> {bedrooms: rent}. Section-8 floor, not
+# top-of-market. Mirrors the baked-constant philosophy of the PPSF table above.
+RENT_FMR = {
+    # Detroit metro
+    "detroit": {1: 750, 2: 950, 3: 1200, 4: 1400},
+    "flint": {1: 650, 2: 800, 3: 1000, 4: 1200},
+    "warren": {1: 900, 2: 1150, 3: 1450, 4: 1650},
+    "dearborn": {1: 950, 2: 1200, 3: 1500, 4: 1700},
+    "redford": {1: 900, 2: 1100, 3: 1400, 4: 1600},
+    "pontiac": {1: 850, 2: 1050, 3: 1300, 4: 1500},
+    "southfield": {1: 950, 2: 1200, 3: 1500, 4: 1750},
+    "taylor": {1: 900, 2: 1100, 3: 1400, 4: 1600},
+    # South / Midwest
+    "birmingham": {1: 800, 2: 950, 3: 1200, 4: 1400},
+    "memphis": {1: 850, 2: 1050, 3: 1300, 4: 1550},
+    "cleveland": {1: 750, 2: 950, 3: 1200, 4: 1400},
+    "toledo": {1: 700, 2: 850, 3: 1050, 4: 1250},
+    # Florida
+    "jacksonville": {1: 1100, 2: 1350, 3: 1600, 4: 1900},
+    "orlando": {1: 1350, 2: 1600, 3: 1900, 4: 2250},
+    "tampa": {1: 1400, 2: 1650, 3: 2000, 4: 2400},
+    "st. petersburg": {1: 1450, 2: 1700, 3: 2050, 4: 2450},
+    "lakeland": {1: 1150, 2: 1350, 3: 1650, 4: 1950},
+    "ocala": {1: 1000, 2: 1200, 3: 1450, 4: 1700},
+    "palm bay": {1: 1200, 2: 1400, 3: 1700, 4: 2000},
+    "pensacola": {1: 1050, 2: 1250, 3: 1550, 4: 1850},
+    "cape coral": {1: 1350, 2: 1600, 3: 1900, 4: 2250},
+    "port st. lucie": {1: 1450, 2: 1700, 3: 2000, 4: 2400},
+    "fort myers": {1: 1300, 2: 1550, 3: 1850, 4: 2200},
+    "kissimmee": {1: 1350, 2: 1600, 3: 1900, 4: 2250},
+    "deltona": {1: 1200, 2: 1400, 3: 1700, 4: 2000},
+    "spring hill": {1: 1150, 2: 1350, 3: 1650, 4: 1950},
+    "winter haven": {1: 1100, 2: 1300, 3: 1600, 4: 1900},
+    "tallahassee": {1: 1050, 2: 1250, 3: 1550, 4: 1850},
+    "gainesville": {1: 1150, 2: 1350, 3: 1650, 4: 1950},
+    "daytona beach": {1: 1150, 2: 1350, 3: 1650, 4: 1950},
+    "new port richey": {1: 1200, 2: 1400, 3: 1700, 4: 2000},
+    "bradenton": {1: 1350, 2: 1600, 3: 1900, 4: 2250},
+    "sarasota": {1: 1500, 2: 1750, 3: 2100, 4: 2500},
+}
+
+# Annual property tax as a % of acquisition basis (price + rehab). Detroit's
+# effective non-homestead rate is among the highest in the US — model it honestly.
+STATE_TAX_RATE = {"MI": 0.030, "OH": 0.020, "AL": 0.006, "TN": 0.009,
+                  "FL": 0.013, "GA": 0.011}
+# Annual landlord insurance ($). FL is in an insurance crisis; Detroit age/crime.
+STATE_INSURANCE = {"MI": 1500, "OH": 1300, "AL": 1500, "TN": 1300,
+                   "FL": 2600, "GA": 1400}
+# Variable operating expenses as a fraction of gross rent.
+VACANCY, MAINTENANCE, MANAGEMENT, CAPEX = 0.08, 0.10, 0.08, 0.05
+VAR_OPEX = VACANCY + MAINTENANCE + MANAGEMENT + CAPEX  # 0.31
+
+# Buyer-required cap rate (net yield). Midwest C-class buyers demand more than FL.
+REQ_CAP = {"midwest": 0.10, "south": 0.09, "southeast": 0.07}
+
 
 def _ppsf(city: str) -> float:
     return PPSF.get(city.strip().lower(), 0)
+
+
+def _rent_estimate(city: str, beds) -> int:
+    """Conservative Section-8-collectable monthly rent for a city + bed count."""
+    table = RENT_FMR.get(city.strip().lower())
+    if not table:
+        return 0
+    try:
+        b = int(beds)
+    except (TypeError, ValueError):
+        b = 3
+    b = max(1, min(4, b))
+    return table.get(b, table.get(3, 0))
+
+
+def _landlord_eval(price, rehab, city, state, region, beds) -> "dict | None":
+    """
+    Score the buy-and-hold path: what an end landlord can pay (incl. our fee) and
+    still hit their required net yield. Returns the metrics + our fee room, or
+    None if there's no rent data / the deal can't cash flow.
+    """
+    rent = _rent_estimate(city, beds)
+    if not rent:
+        return None
+    gross = rent * 12
+    basis = price + rehab                       # acquisition basis for tax/yield
+    taxes = basis * STATE_TAX_RATE.get(state, 0.013)
+    insurance = STATE_INSURANCE.get(state, 1500)
+    opex = gross * VAR_OPEX + taxes + insurance
+    noi = gross - opex
+    if noi <= 0:
+        return None
+    req_cap = REQ_CAP.get(region, 0.09)
+    max_all_in = noi / req_cap                   # most a buyer pays incl. our fee
+    landlord_fee = max_all_in - rehab - price    # room left for the assignment
+    gross_yield = gross / basis if basis else 0
+    return {
+        "monthly_rent": rent,
+        "annual_gross": round(gross),
+        "noi": round(noi),
+        "req_cap": req_cap,
+        "max_all_in": round(max_all_in),
+        "landlord_fee": round(landlord_fee),
+        "gross_yield": round(gross_yield, 3),
+    }
 
 
 def _pick_scope(year, asking_ppsf, mkt_ppsf) -> str:
@@ -148,11 +263,25 @@ def evaluate(rec: dict) -> dict | None:
     repairs_heavy = estimate_by_scope(sqft, "heavy", region=region,
                                       bedrooms=int(beds), bathrooms=baths)["total_mid"]
 
-    fee = ARV_RULE * arv - repairs - price
+    # ── Path 1: FLIP (70% rule for a fix-and-flip buyer) ──────────────────────
+    flip_fee = ARV_RULE * arv - repairs - price
     fee_heavy = ARV_RULE * arv - repairs_heavy - price
 
-    if fee < MIN_FEE:
-        return None  # THE GATE
+    # ── Path 2: LANDLORD (cash-flow buyer — the real Detroit/Midwest lever) ───
+    ll = _landlord_eval(price, repairs, city, state, region, beds)
+    landlord_fee = ll["landlord_fee"] if ll else 0
+
+    # A candidate survives if EITHER buyer type leaves us room for our fee.
+    best_fee = max(flip_fee, landlord_fee)
+    if best_fee < MIN_FEE:
+        return None  # THE GATE — fails for both flippers and landlords
+
+    flip_ok = flip_fee >= MIN_FEE
+    landlord_ok = landlord_fee >= MIN_FEE
+    deal_type = ("both" if (flip_ok and landlord_ok)
+                 else "flip" if flip_ok else "landlord")
+    # The fee we lead with is the buyer type that pays the most.
+    primary_fee = flip_fee if flip_fee >= landlord_fee else landlord_fee
 
     agent = rec.get("listingAgent") or {}
     office = rec.get("listingOffice") or {}
@@ -166,9 +295,21 @@ def evaluate(rec: dict) -> dict | None:
         "asking_ppsf": round(asking_ppsf, 1),
         "rehab_scope": scope, "repairs": round(repairs),
         "repairs_heavy": round(repairs_heavy),
-        "honest_fee": round(fee), "fee_if_heavy": round(fee_heavy),
+        # Flip path
+        "flip_fee": round(flip_fee), "fee_if_heavy": round(fee_heavy),
         "survives_heavy": fee_heavy >= MIN_FEE,
-        "fee_flag": "VERIFY ARV (too good)" if fee > FEE_SANITY_CEILING else "",
+        # Landlord path
+        "deal_type": deal_type,
+        "landlord_fee": round(landlord_fee),
+        "monthly_rent": ll["monthly_rent"] if ll else 0,
+        "annual_gross": ll["annual_gross"] if ll else 0,
+        "noi": ll["noi"] if ll else 0,
+        "cap_rate_target": ll["req_cap"] if ll else 0,
+        "gross_yield": ll["gross_yield"] if ll else 0,
+        "landlord_max_all_in": ll["max_all_in"] if ll else 0,
+        # Combined ranking fee + back-compat alias
+        "honest_fee": round(primary_fee), "best_fee": round(best_fee),
+        "fee_flag": "VERIFY (too good — check rent/ARV)" if best_fee > FEE_SANITY_CEILING else "",
         "days_on_market": rec.get("daysOnMarket"),
         "listing_type": rec.get("listingType"),
         "mls_number": rec.get("mlsNumber"), "mls_name": rec.get("mlsName"),
@@ -201,17 +342,20 @@ def hunt() -> dict:
         market_log.append(f"{city},{state}: {len(recs)} live -> {passes} pass gate")
         time.sleep(0.4)  # be polite to the API
 
-    # dedupe by address, keep best fee
+    # dedupe by address, keep best combined fee
     by_addr = {}
     for c in candidates:
         a = c["address"]
-        if a not in by_addr or c["honest_fee"] > by_addr[a]["honest_fee"]:
+        if a not in by_addr or c["best_fee"] > by_addr[a]["best_fee"]:
             by_addr[a] = c
-    ranked = sorted(by_addr.values(), key=lambda x: x["honest_fee"], reverse=True)
+    ranked = sorted(by_addr.values(), key=lambda x: x["best_fee"], reverse=True)
 
+    flips = sum(1 for c in ranked if c["deal_type"] in ("flip", "both"))
+    landlords = sum(1 for c in ranked if c["deal_type"] in ("landlord", "both"))
     result = {
         "generated": started, "finished": datetime.now().isoformat(),
         "listings_pulled": pulled, "candidates_passing_gate": len(ranked),
+        "flip_candidates": flips, "landlord_candidates": landlords,
         "min_fee_gate": MIN_FEE, "market_log": market_log,
         "candidates": ranked,
     }
@@ -227,13 +371,17 @@ if __name__ == "__main__":
     print(f"Pulled {r['listings_pulled']} live listings across {len(MARKETS)} markets")
     for m in r["market_log"]:
         print("  ", m)
-    print(f"\n{r['candidates_passing_gate']} candidates clear the ${MIN_FEE:,}+ honest-fee gate\n")
+    print(f"\n{r['candidates_passing_gate']} candidates clear the ${MIN_FEE:,}+ gate "
+          f"({r['flip_candidates']} flip / {r['landlord_candidates']} landlord)\n")
     for i, c in enumerate(r["candidates"][:15], 1):
         heavy = "✓survives heavy" if c["survives_heavy"] else "✗fails if heavy rehab"
         flag = f"  ⚠{c['fee_flag']}" if c["fee_flag"] else ""
-        print(f"{i:>2}. ${c['honest_fee']:>7,} fee | {c['address']}")
+        print(f"{i:>2}. ${c['best_fee']:>7,} fee [{c['deal_type'].upper()}] | {c['address']}")
         print(f"     ask ${c['price']:,} | ARV(mkt) ${c['arv_market']:,} @${c['ppsf_market']}/sqft | "
               f"{c['beds']}bd/{c['sqft']}sf {c['year_built']} {c['property_type']}")
-        print(f"     rehab[{c['rehab_scope']}] ${c['repairs']:,} | {heavy} (fee@heavy ${c['fee_if_heavy']:,}) | "
-              f"DOM {c['days_on_market']} | {c['listing_type']}{flag}")
+        print(f"     rehab[{c['rehab_scope']}] ${c['repairs']:,} | flip fee ${c['flip_fee']:,} "
+              f"({heavy}) | landlord fee ${c['landlord_fee']:,}")
+        if c["monthly_rent"]:
+            print(f"     RENT ${c['monthly_rent']:,}/mo | NOI ${c['noi']:,}/yr | "
+                  f"gross yield {c['gross_yield']*100:.1f}% | buyer pays ≤${c['landlord_max_all_in']:,}{flag}")
         print(f"     AGENT: {c['agent_name']} | {c['agent_phone']} | {c['agent_email']}")
