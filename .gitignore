@@ -80,6 +80,12 @@
 !/clipper/CLIPPER.md
 !/clipper/HARNESS.md
 
+# social-trends harness
+!/social-trends/
+/social-trends/*
+/social-trends/.*
+!/social-trends/agent-harness/
+
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
 **/*.egg-info/
