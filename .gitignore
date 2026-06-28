@@ -63,6 +63,8 @@
 /drawio/.*
 /clipper/*
 /clipper/.*
+/social-trends/*
+/social-trends/.*
 
 # Step 6: ...except agent-harness/
 !/gimp/agent-harness/
@@ -79,6 +81,7 @@
 !/clipper/agent-harness/
 !/clipper/CLIPPER.md
 !/clipper/HARNESS.md
+!/social-trends/agent-harness/
 
 # Step 7: Ignore build artifacts within allowed dirs
 **/__pycache__/
