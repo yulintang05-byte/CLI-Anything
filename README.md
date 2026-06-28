@@ -7,8 +7,8 @@ CLI-Anything: Bridging the Gap Between AI Agents and the World's Software</stron
 
 <p align="center">
   <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick_Start-5_min-blue?style=for-the-badge" alt="Quick Start"></a>
-  <a href="#-demonstrations"><img src="https://img.shields.io/badge/Demos-11_Apps-green?style=for-the-badge" alt="Demos"></a>
-  <a href="#-test-results"><img src="https://img.shields.io/badge/Tests-1%2C508_Passing-brightgreen?style=for-the-badge" alt="Tests"></a>
+  <a href="#-demonstrations"><img src="https://img.shields.io/badge/Demos-12_Apps-green?style=for-the-badge" alt="Demos"></a>
+  <a href="#-test-results"><img src="https://img.shields.io/badge/Tests-1%2C634_Passing-brightgreen?style=for-the-badge" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License"></a>
 </p>
 
@@ -470,12 +470,19 @@ Each application received complete, production-ready CLI interfaces — not demo
 <td align="center">✅ 50</td>
 </tr>
 <tr>
+<td align="center"><strong>📈 Social Trends</strong></td>
+<td>Viral Trends, Hashtags & Theme Pages</td>
+<td><code>social-trends</code></td>
+<td>YouTube Data API + yt-dlp</td>
+<td align="center">✅ 126</td>
+</tr>
+<tr>
 <td align="center" colspan="4"><strong>Total</strong></td>
-<td align="center"><strong>✅ 1,508</strong></td>
+<td align="center"><strong>✅ 1,634</strong></td>
 </tr>
 </table>
 
-> **100% pass rate** across all 1,508 tests — 1,073 unit tests + 435 end-to-end tests.
+> **100% pass rate** across all 1,634 tests — 1,153 unit tests + 481 end-to-end tests.
 
 ---
 
