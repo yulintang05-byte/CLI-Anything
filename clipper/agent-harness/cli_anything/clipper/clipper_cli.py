@@ -19,6 +19,7 @@ from cli_anything.clipper.core import project as proj_mod
 from cli_anything.clipper.core import clips as clips_mod
 from cli_anything.clipper.core import filters as filters_mod
 from cli_anything.clipper.core import export as export_mod
+from cli_anything.clipper.core import trends as trends_mod
 from cli_anything.clipper.utils.time import parse_timecode, format_duration
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -577,6 +578,72 @@ def export_preset_info(preset_name: str) -> None:
     """Show full details for an export preset."""
     result = export_mod.preset_info(preset_name)
     output(result, f"Preset: {preset_name}")
+
+
+# ── trends group ──────────────────────────────────────────────────────────────
+
+@cli.group()
+def trends():
+    """Trend snapshots: hashtags, sounds, captions (show, hashtags, sounds, caption)."""
+    pass
+
+
+def _warn_if_stale(snap: dict) -> None:
+    if snap.get("stale") and not _json_output:
+        click.echo(f"⚠ Trend snapshot {snap['date']} is {snap['age_days']} days old — refresh it.", err=True)
+
+
+@trends.command("show")
+@click.option("--date", default=None, help="Snapshot date (default: latest)")
+@click.option("--platform", type=click.Choice(trends_mod.PLATFORMS), default="tiktok", show_default=True)
+@handle_error
+def trends_show(date: Optional[str], platform: str) -> None:
+    """Show trending hashtags, sounds and formats for a platform."""
+    snap = trends_mod.load_snapshot(date)
+    _warn_if_stale(snap)
+    data = {"date": snap["date"], "age_days": snap["age_days"], **snap.get(platform, {})}
+    output(data, f"Trends for {platform} ({snap['date']}):")
+
+
+@trends.command("hashtags")
+@click.option("--platform", type=click.Choice(trends_mod.PLATFORMS), default="tiktok", show_default=True)
+@click.option("--niche", default=None, help="Niche, e.g. gaming, streamer, motivation, comedy")
+@click.option("--limit", type=int, default=None, help="Max tags (default: platform best practice)")
+@handle_error
+def trends_hashtags(platform: str, niche: Optional[str], limit: Optional[int]) -> None:
+    """Suggest a hashtag set for a post."""
+    snap = trends_mod.load_snapshot()
+    _warn_if_stale(snap)
+    tags = trends_mod.suggest_hashtags(snap, platform, niche, limit)
+    output({"hashtags": tags}, " ".join(tags))
+
+
+@trends.command("sounds")
+@click.option("--platform", type=click.Choice(trends_mod.PLATFORMS), default="tiktok", show_default=True)
+@click.option("--mood", default=None, help="Preferred mood, e.g. phonk, edit, holiday, gaming")
+@handle_error
+def trends_sounds(platform: str, mood: Optional[str]) -> None:
+    """Suggest trending sounds."""
+    snap = trends_mod.load_snapshot()
+    _warn_if_stale(snap)
+    output(trends_mod.suggest_sounds(snap, platform, mood), "Trending sounds:")
+
+
+@trends.command("caption")
+@click.argument("hook")
+@click.option("--platform", type=click.Choice(trends_mod.PLATFORMS), default="tiktok", show_default=True)
+@click.option("--niche", default=None)
+@click.option("--cta", default=None, help="Call to action line ('' to omit)")
+@handle_error
+def trends_caption(hook: str, platform: str, niche: Optional[str], cta: Optional[str]) -> None:
+    """Build a post caption: hook + CTA + hashtags."""
+    snap = trends_mod.load_snapshot()
+    _warn_if_stale(snap)
+    result = trends_mod.build_caption(hook, platform, snap, niche, cta)
+    if _json_output:
+        output(result)
+    else:
+        click.echo(result["caption"])
 
 
 # ── session group ─────────────────────────────────────────────────────────────
