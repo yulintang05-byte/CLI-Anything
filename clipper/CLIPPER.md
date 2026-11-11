@@ -103,3 +103,19 @@ ffmpeg -f lavfi -i "color=c=blue:size=1920x1080:rate=30" \
        -f lavfi -i "sine=frequency=440:sample_rate=44100" \
        -t 30 /root/clipper/test.mp4
 ```
+
+## Trends (hashtags, sounds, captions)
+
+Dated snapshots of TikTok / YouTube Shorts trends live in
+`agent-harness/cli_anything/clipper/data/trends/YYYY-MM-DD.json`. The CLI
+warns when the latest snapshot is older than 7 days.
+
+```bash
+clipper trends show --platform tiktok
+clipper trends hashtags --platform youtube_shorts --niche streamer
+clipper trends sounds --mood phonk
+clipper trends caption "Clutch 1v4 to win it all" --niche gaming
+```
+
+To refresh, add a new snapshot file with the same schema (newest date wins).
+See `THEME_PAGES.md` for the account/theme-page playbook.

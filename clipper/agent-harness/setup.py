@@ -9,6 +9,8 @@ setup(
     long_description=(Path(__file__).parent / "cli_anything" / "clipper" / "README.md").read_text(),
     long_description_content_type="text/markdown",
     packages=find_namespace_packages(include=["cli_anything*"]),
+    package_data={"cli_anything.clipper": ["data/trends/*.json"]},
+    include_package_data=True,
     python_requires=">=3.10",
     install_requires=[
         "click>=8.0",

@@ -1,0 +1,78 @@
+{
+  "date": "2026-11-11",
+  "notes": "Snapshot from public trend trackers. Trending tags/sounds decay in days; re-check before posting. Commercial sounds may be unavailable to business accounts - use the platform's Commercial Music Library when posting as a business.",
+  "sources": [
+    "https://tokchart.com/tiktok-trending-hashtags",
+    "https://tokchart.com/tiktok-trending-sounds",
+    "https://www.revid.ai/viral-tiktok-songs",
+    "https://newengen.com/insights/tiktok-trends/",
+    "https://napoleoncat.com/blog/tiktok-trends/",
+    "https://www.anijam.ai/blog/youtube-shorts-trends/",
+    "https://kworb.net/youtube/trending/us.html"
+  ],
+  "tiktok": {
+    "hashtags": [
+      {"tag": "#pick14daychallenge", "growth_pct": 418, "niches": ["challenge", "lifestyle"]},
+      {"tag": "#stormarena", "growth_pct": 590, "niches": ["gaming"]},
+      {"tag": "#ffstormarena", "growth_pct": 243, "niches": ["gaming"]},
+      {"tag": "#ffesportsid", "growth_pct": 559, "niches": ["gaming", "esports"]},
+      {"tag": "#swordofjustice", "growth_pct": 521, "niches": ["gaming"]},
+      {"tag": "#bluetsunami", "growth_pct": 505, "niches": ["sports"]},
+      {"tag": "#livefest2026", "growth_pct": 317, "niches": ["live", "creator"]},
+      {"tag": "#dealsonair", "growth_pct": 72, "niches": ["shopping", "deals"]},
+      {"tag": "#teslaroadster", "growth_pct": null, "niches": ["cars", "tech"]},
+      {"tag": "#skincarecommunity", "growth_pct": null, "niches": ["beauty"]},
+      {"tag": "#1millionstories", "growth_pct": null, "niches": ["storytime", "lifestyle"]}
+    ],
+    "sounds": [
+      {"title": "Paper Moon Static", "artist": "Marnie Cusk", "mood": "aesthetic"},
+      {"title": "Housewife", "artist": "Tate McRae", "mood": "pop"},
+      {"title": "You're Under Arrest", "artist": "ILLIT", "mood": "pop"},
+      {"title": "BLUE WATER CANDY", "artist": "DJ Allanzinho JP", "mood": "phonk"},
+      {"title": "Self Aware", "artist": "Temper City", "mood": "edit"},
+      {"title": "Wyw my sweetie #JerseyClub (Slowed)", "artist": "nissi & 25Hzz", "mood": "edit"},
+      {"title": "Zany Emote Fortnite", "artist": "CsCrafty", "mood": "gaming"},
+      {"title": "Detstvo", "artist": "Rauf & Faik", "mood": "nostalgic"},
+      {"title": "Stop The Wedding!", "artist": "Ashe", "mood": "storytime"},
+      {"title": "Ain't In LA", "artist": "ADELA", "mood": "pov"},
+      {"title": "It's Time / All I Want for Christmas Is You", "artist": "Mariah Carey", "mood": "holiday"},
+      {"title": "Let It Snow! Let It Snow! Let It Snow!", "artist": "Dean Martin", "mood": "holiday"}
+    ],
+    "formats": [
+      "\"Someone's gotta hold it down\" (Ain't In LA) - POV of the person who keeps things running",
+      "Holiday kickoff (Mariah Carey) - first-of-season reveal",
+      "Pick-14-day challenge - multi-part series, drives follows"
+    ]
+  },
+  "youtube_shorts": {
+    "hashtags": [
+      {"tag": "#shorts", "growth_pct": null, "niches": ["*"]},
+      {"tag": "#damehombro", "growth_pct": null, "niches": ["dance", "music"]},
+      {"tag": "#friendgroup", "growth_pct": null, "niches": ["comedy", "skit"]},
+      {"tag": "#pov", "growth_pct": null, "niches": ["comedy", "skit", "storytime"]}
+    ],
+    "sounds": [
+      {"title": "Dame Hombro", "artist": "Bulin 47", "mood": "dance"},
+      {"title": "POKITO", "artist": "Daddy Yankee & Diljit Dosanjh", "mood": "pop"},
+      {"title": "take me home (4 christmas)", "artist": "Olivia Rodrigo", "mood": "holiday"},
+      {"title": "PASSO BEM SOLTO (Slowed)", "artist": "various", "mood": "phonk"},
+      {"title": "MONTAGEM ZORA", "artist": "various", "mood": "phonk"}
+    ],
+    "formats": [
+      "Friend-group POV skit ('the glue of the friend group')",
+      "Dame Hombro dance - swap in character/pet, keep timing"
+    ]
+  },
+  "evergreen": {
+    "gaming": ["#gaming", "#gamer", "#clips", "#gamingclips"],
+    "streamer": ["#streamer", "#twitch", "#streamhighlights", "#clips"],
+    "motivation": ["#motivation", "#mindset", "#discipline", "#quotes"],
+    "comedy": ["#funny", "#comedy", "#memes", "#relatable"],
+    "beauty": ["#skincare", "#beautytok", "#grwm"],
+    "tech": ["#tech", "#ai", "#gadgets"],
+    "cars": ["#cars", "#carsoftiktok", "#supercars"],
+    "sports": ["#sports", "#highlights", "#nba", "#football"],
+    "finance": ["#money", "#finance", "#sidehustle", "#investing"],
+    "default": ["#fyp", "#viral"]
+  }
+}
