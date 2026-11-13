@@ -19,6 +19,7 @@ from cli_anything.clipper.core import project as proj_mod
 from cli_anything.clipper.core import clips as clips_mod
 from cli_anything.clipper.core import filters as filters_mod
 from cli_anything.clipper.core import export as export_mod
+from cli_anything.clipper.core import trends as trends_mod
 from cli_anything.clipper.utils.time import parse_timecode, format_duration
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -577,6 +578,66 @@ def export_preset_info(preset_name: str) -> None:
     """Show full details for an export preset."""
     result = export_mod.preset_info(preset_name)
     output(result, f"Preset: {preset_name}")
+
+
+# ── trends group ──────────────────────────────────────────────────────────────
+
+@cli.group()
+def trends():
+    """Viral hashtag / sound intelligence for TikTok, Shorts, Reels."""
+
+
+@trends.command("show")
+@click.option("--snapshot", "snapshot_path", default=None, help="Custom snapshot JSON")
+@handle_error
+def trends_show(snapshot_path: Optional[str]) -> None:
+    """Show the current trend snapshot (hashtags, sounds, formats)."""
+    output(trends_mod.load_snapshot(snapshot_path), "Trend snapshot:")
+
+
+@trends.command("fetch")
+@click.option("--tag", default="shorts", show_default=True, help="YouTube hashtag page to scrape")
+@click.option("--api", "use_api", is_flag=True, help="Use YouTube Data API (YOUTUBE_API_KEY)")
+@click.option("--region", default="US", show_default=True)
+@click.option("-o", "--output", "out_path", default=None, help="Write result JSON here")
+@handle_error
+def trends_fetch(tag: str, use_api: bool, region: str, out_path: Optional[str]) -> None:
+    """Pull live YouTube trend data (titles + co-occurring hashtags)."""
+    data = trends_mod.fetch_youtube_api(region) if use_api else trends_mod.fetch_youtube_hashtag(tag)
+    if out_path:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    output(data, f"Fetched {len(data['titles'])} titles from {data['source']}")
+
+
+@trends.command("suggest")
+@click.option("--platform", default="tiktok", show_default=True,
+              type=click.Choice(list(trends_mod.PLATFORM_LIMITS)))
+@click.option("--niche", default=None, help="Niche key (gaming, finance, pets, ...)")
+@click.option("--snapshot", "snapshot_path", default=None)
+@handle_error
+def trends_suggest(platform: str, niche: Optional[str], snapshot_path: Optional[str]) -> None:
+    """Suggest a platform-sized hashtag set + sounds."""
+    snap = trends_mod.load_snapshot(snapshot_path)
+    output(trends_mod.suggest(platform, niche, snap), "Suggestion:")
+
+
+@trends.command("apply")
+@click.option("--platform", default="tiktok", show_default=True,
+              type=click.Choice(list(trends_mod.PLATFORM_LIMITS)))
+@click.option("--niche", default=None)
+@click.option("--caption", default=None, help="Caption text; hashtags are appended")
+@click.option("--snapshot", "snapshot_path", default=None)
+@handle_error
+def trends_apply(platform: str, niche: Optional[str], caption: Optional[str],
+                 snapshot_path: Optional[str]) -> None:
+    """Write caption + hashtags into project metadata.social.<platform>."""
+    sess = get_session()
+    snap = trends_mod.load_snapshot(snapshot_path)
+    result = trends_mod.apply_to_project(sess, platform, niche, caption, snap)
+    if sess.project_path:
+        sess.save_session()
+    output(result, f"Applied {platform} metadata")
 
 
 # ── session group ─────────────────────────────────────────────────────────────

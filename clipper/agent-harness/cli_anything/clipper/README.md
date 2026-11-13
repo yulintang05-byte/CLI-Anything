@@ -133,6 +133,17 @@ python3 -m cli_anything.clipper --json export presets
 
 ---
 
+### Trends (hashtags / sounds)
+
+```bash
+clipper trends show                                  # curated snapshot
+clipper trends fetch --tag shorts [-o out.json]      # scrape YouTube hashtag page
+clipper trends fetch --api --region US               # YouTube Data API (YOUTUBE_API_KEY)
+clipper trends suggest --platform tiktok --niche finance
+clipper --project p.json trends apply --platform shorts --niche gaming --caption "..."
+```
+See `clipper/TRENDS.md` for the current trend report and theme-page playbook.
+
 ## Example Workflows
 
 ### Stream highlight reel
